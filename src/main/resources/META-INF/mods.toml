@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="Danzy"
+description='''
+Wheels from Create Aeronautics / Offroad chew up the ground: turf randomly turns into sand, dirt, mud, gravel or coarse dirt, and snow layers get packed away, sometimes leaving mud behind.
+'''
+
+[[mixins]]
+config="tiretracks.mixins.json"
+
+[[dependencies.tiretracks]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.tiretracks]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"

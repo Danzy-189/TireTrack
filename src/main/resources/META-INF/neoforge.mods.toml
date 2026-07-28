@@ -1,0 +1,53 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "tiretracks"
+version = "3.0.0"
+displayName = "TireTracks"
+authors = "Danzy"
+description = '''
+Wheels from Create Aeronautics (Offroad / Sable / Simulated) chew up the ground they roll over:
+turf turns into sand, dirt, mud, gravel or coarse dirt, and snow layers get packed away, sometimes leaving mud behind.
+'''
+
+[[mixins]]
+config = "tiretracks.mixins.json"
+
+[[dependencies.tiretracks]]
+    modId = "neoforge"
+    type = "required"
+    versionRange = "[21.1.0,)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.tiretracks]]
+    modId = "minecraft"
+    type = "required"
+    versionRange = "[1.21.1,1.22)"
+    ordering = "NONE"
+    side = "BOTH"
+
+# Soft deps: the mixin is @Pseudo, so a wrong/absent mod id just makes TireTracks idle
+# instead of refusing to launch. Load AFTER them so our mixin applies on top.
+[[dependencies.tiretracks]]
+    modId = "sable"
+    type = "optional"
+    versionRange = "[1.2.2,)"
+    ordering = "AFTER"
+    side = "BOTH"
+
+[[dependencies.tiretracks]]
+    modId = "simulated"
+    type = "optional"
+    versionRange = "[1.2.1,)"
+    ordering = "AFTER"
+    side = "BOTH"
+
+[[dependencies.tiretracks]]
+    modId = "offroad"
+    type = "optional"
+    versionRange = "[1.2.1,)"
+    ordering = "AFTER"
+    side = "BOTH"

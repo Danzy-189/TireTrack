@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'net.neoforged.moddev' version '2.0.78'
+}
+
+group = 'com.tiretracks'
+version = '3.0.0'
+base { archivesName = 'TireTracks' }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    // Minecraft 1.21.1
+    version = '21.1.235'
+
+    runs {
+        client { client() }
+        server { server() }
+    }
+
+    mods {
+        tiretracks { sourceSet sourceSets.main }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.neoforged.net/releases' }
+    // Create + friends, only needed if you want to compile against them (not required)
+    maven { url = 'https://maven.createmod.net' }
+    maven { url = 'https://maven.blamejared.com/' }
+    maven { url = 'https://mvn.devos.one/releases/' }
+    flatDir { dirs 'libs' }
+}
+
+dependencies {
+    // OPTIONAL: only for IDE autocomplete against Sable 1.2.2 / Simulated 1.2.1 / Offroad.
+    // The mixin targets the class BY NAME (@Pseudo), so the build works without them.
+    // Drop the jars into libs/ and uncomment:
+    // compileOnly fileTree(dir: 'libs', include: ['*.jar'])
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+jar {
+    manifest {
+        attributes([
+            'Specification-Title'   : 'TireTracks',
+            'Specification-Version' : '3.0.0',
+            'Implementation-Title'  : 'TireTracks',
+            'Implementation-Version': '3.0.0'
+        ])
+    }
+}
