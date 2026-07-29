@@ -2,16 +2,17 @@ package com.tiretracks;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,19 +28,23 @@ import java.util.concurrent.ConcurrentHashMap;
  * ticks = 20 minutes real time. This makes healing observable within a play
  * session and feels Minecraft-native.</p>
  *
- * <p>Healing checks use a random tick style: every server tick, the system picks
- * a few random positions in each loaded chunk and checks whether they need
- * healing. This spreads the cost evenly and ensures every block eventually gets
- * checked without scanning the entire world.</p>
+ * <p>Healing checks pick random positions near players instead of iterating all
+ * loaded chunks. This avoids internal API access, scales with player count
+ * instead of world size, and naturally focuses healing where it matters.</p>
  */
 @EventBusSubscriber(modid = TireTracks.MODID)
 public final class RoadHealing {
 
     /**
-     * Checks per loaded chunk per second. Lowering this saves performance but
-     * slows healing.
+     * Checks per player per second. Each check picks a random position within
+     * 128 blocks of the player.
      */
-    private static final int CHECKS_PER_CHUNK_PER_SECOND = 10;
+    private static final int CHECKS_PER_PLAYER_PER_SECOND = 20;
+
+    /**
+     * Horizontal radius around each player to check for healing.
+     */
+    private static final int CHECK_RADIUS = 128;
 
     /**
      * Ticks per Minecraft day.
@@ -97,43 +102,55 @@ public final class RoadHealing {
     }
 
     private static void tickLevel(ServerLevel level) {
-        /*
-         * Pick a few random blocks in each loaded chunk and check them for
-         * healing. This spreads the cost evenly and ensures eventual coverage.
-         */
-        Iterable<LevelChunk> chunks = level.getChunkSource().getLoadedChunks();
+        List<ServerPlayer> players = level.players();
 
-        for (LevelChunk chunk : chunks) {
-            tickChunk(level, chunk);
+        if (players.isEmpty()) {
+            return;
         }
-    }
 
-    private static void tickChunk(ServerLevel level, LevelChunk chunk) {
         RandomSource random = level.getRandom();
 
         /*
-         * One check per chunk per tick means CHECKS_PER_CHUNK_PER_SECOND checks
-         * per chunk per second (20 ticks/s).
+         * Check a few random positions near each player. This naturally focuses
+         * healing where players are active, scales with player count instead of
+         * world size, and avoids iterating all loaded chunks.
          */
-        double checksThisTick = CHECKS_PER_CHUNK_PER_SECOND / 20.0D;
+        double checksPerPlayerThisTick = CHECKS_PER_PLAYER_PER_SECOND / 20.0D;
 
-        if (random.nextDouble() >= checksThisTick) {
+        for (ServerPlayer player : players) {
+            if (random.nextDouble() >= checksPerPlayerThisTick) {
+                continue;
+            }
+
+            checkRandomPosNear(level, player.blockPosition(), random);
+        }
+    }
+
+    private static void checkRandomPosNear(
+            ServerLevel level,
+            BlockPos center,
+            RandomSource random
+    ) {
+        /*
+         * Pick a random position within CHECK_RADIUS blocks of center.
+         */
+        int dx = random.nextInt(CHECK_RADIUS * 2 + 1) - CHECK_RADIUS;
+        int dz = random.nextInt(CHECK_RADIUS * 2 + 1) - CHECK_RADIUS;
+
+        BlockPos columnBase = center.offset(dx, 0, dz);
+
+        if (!level.hasChunkAt(columnBase)) {
             return;
         }
 
         /*
-         * Pick a random column in the chunk, scan it for healable blocks.
+         * Scan the column from bottom to top, checking each block.
          */
-        int localX = random.nextInt(16);
-        int localZ = random.nextInt(16);
-
-        BlockPos columnBase = chunk.getPos().getWorldPosition();
-
         int minY = level.getMinBuildHeight();
         int maxY = level.getMaxBuildHeight();
 
         for (int y = minY; y < maxY; y++) {
-            BlockPos pos = columnBase.offset(localX, y, localZ);
+            BlockPos pos = new BlockPos(columnBase.getX(), y, columnBase.getZ());
 
             BlockState state = level.getBlockState(pos);
 
