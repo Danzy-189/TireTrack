@@ -44,7 +44,8 @@ public final class TireTracksTags {
     public static final TagKey<Block> WET = block("wet");
 
     /**
-     * Anything treated as a snow surface.
+     * Anything treated as a snow surface, including the ice a groomed track
+     * turns into.
      */
     public static final TagKey<Block> SNOW = block("snow");
 
@@ -54,7 +55,7 @@ public final class TireTracksTags {
     public static final TagKey<Block> MUDDYABLE = block("muddyable");
 
     /**
-     * Ground that may be replaced by packed snow when snow is driven into it.
+     * Ground that snow may be packed into, turning it into an ice track.
      */
     public static final TagKey<Block> PACKABLE_GROUND = block("packable_ground");
 

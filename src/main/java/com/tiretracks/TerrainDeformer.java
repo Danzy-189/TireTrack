@@ -321,10 +321,18 @@ public final class TerrainDeformer {
     }
 
     /**
-     * Snow is compressed rather than deleted: layers are shaved off, and the
-     * last one is driven into the ground as packed snow, which further passes
-     * polish into ice. Both only happen in biomes cold enough to keep them, so
-     * no melting holes appear in a temperate lawn.
+     * Snow is compressed rather than deleted: layers are shaved off, the last
+     * one is driven into the ground as ice, and further passes polish that into
+     * packed ice.
+     *
+     * <p>Vanilla has no packed snow block, and a snow block cannot serve as the
+     * packed stage either: it is already the entry point of this chain, so a
+     * groomed track would collapse back into loose layers forever. Ice is flush
+     * with the surface, never turns back into snow, and is genuinely faster to
+     * drive on.</p>
+     *
+     * <p>All of it only happens in biomes cold enough to keep the result, so no
+     * melting holes appear in a temperate lawn.</p>
      */
     private static void packSnow(
             ServerLevel level,
@@ -342,9 +350,10 @@ public final class TerrainDeformer {
         RandomSource random = level.getRandom();
 
         /*
-         * Packed snow is the last cosmetic stage before an ice road.
+         * A groomed track, or a frozen puddle, is polished one step further.
+         * Packed ice is terminal and never melts.
          */
-        if (state.is(Blocks.PACKED_SNOW)) {
+        if (state.is(Blocks.ICE)) {
             if (!TireTracksConfig.packSnow()
                     || !Weather.freezes(level, pos)) {
                 return;
@@ -357,7 +366,7 @@ public final class TerrainDeformer {
 
             level.setBlock(
                     pos,
-                    Blocks.ICE.defaultBlockState(),
+                    Blocks.PACKED_ICE.defaultBlockState(),
                     Block.UPDATE_ALL
             );
 
@@ -414,8 +423,8 @@ public final class TerrainDeformer {
         }
 
         /*
-         * Driven into the ground, the last layer becomes packed snow flush with
-         * the surface: a groomed track without a bump for the suspension.
+         * Driven into the ground, the last layer leaves ice flush with the
+         * surface: a groomed track without a bump for the suspension.
          */
         if (TireTracksConfig.packSnow()
                 && Weather.freezes(level, pos)
@@ -423,7 +432,7 @@ public final class TerrainDeformer {
                 && belowState.isFaceSturdy(level, belowPos, Direction.UP)) {
             level.setBlock(
                     belowPos,
-                    Blocks.PACKED_SNOW.defaultBlockState(),
+                    Blocks.ICE.defaultBlockState(),
                     Block.UPDATE_ALL
             );
 
