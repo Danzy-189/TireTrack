@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "#tiretracks:turf",
+    "#tiretracks:muddyable",
+    "#minecraft:sand",
+    "minecraft:gravel"
+  ]
+}

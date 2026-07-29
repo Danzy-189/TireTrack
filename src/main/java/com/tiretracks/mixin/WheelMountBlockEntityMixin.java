@@ -1,8 +1,7 @@
 package com.tiretracks.mixin;
 
-import com.tiretracks.TerrainDeformer;
-import com.tiretracks.TireTracksConfig;
-import com.tiretracks.WheelSpray;
+import com.tiretracks.WheelContact;
+import com.tiretracks.WheelState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -12,9 +11,13 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
+/**
+ * Hooks the block lookup a wheel performs while checking the ground under it.
+ *
+ * <p>Deliberately thin: it owns the per wheel state and forwards to
+ * {@link WheelContact}. All behaviour lives in ordinary classes, which keeps the
+ * mixin easy to keep working across Offroad and Sable updates.</p>
+ */
 @Pseudo
 @Mixin(
         targets = "dev.ryanhcode.offroad.content.blocks.wheel_mount.WheelMountBlockEntity",
@@ -23,13 +26,7 @@ import java.lang.reflect.Method;
 public abstract class WheelMountBlockEntityMixin {
 
     @Unique
-    private int tiretracks$cooldown = 0;
-
-    @Unique
-    private int tiretracks$sprayCooldown = 0;
-
-    @Unique
-    private long tiretracks$lastContactPos = Long.MIN_VALUE;
+    private WheelState tiretracks$wheelState;
 
     @Redirect(
             method = "sable$physicsTick",
@@ -49,15 +46,23 @@ public abstract class WheelMountBlockEntityMixin {
             Level level,
             BlockPos pos
     ) {
-        BlockState state =
-                level.getBlockState(pos);
+        BlockState state = level.getBlockState(pos);
 
         try {
             if (!level.isClientSide) {
-                tiretracks$handleContact(
+                WheelState wheelState = this.tiretracks$wheelState;
+
+                if (wheelState == null) {
+                    wheelState = new WheelState();
+                    this.tiretracks$wheelState = wheelState;
+                }
+
+                WheelContact.onWheelContact(
+                        this,
                         level,
                         pos,
-                        state
+                        state,
+                        wheelState
                 );
             }
         } catch (Throwable ignored) {
@@ -67,209 +72,5 @@ public abstract class WheelMountBlockEntityMixin {
         }
 
         return state;
-    }
-
-    @Unique
-    private void tiretracks$handleContact(
-            Level level,
-            BlockPos pos,
-            BlockState state
-    ) {
-        /*
-         * A wheel that stays inside the same block is either parked or barely
-         * creeping, so spray is suppressed to avoid particle spam.
-         */
-        long packedPos = pos.asLong();
-
-        boolean moved =
-                packedPos != this.tiretracks$lastContactPos;
-
-        this.tiretracks$lastContactPos = packedPos;
-
-        if (--this.tiretracks$sprayCooldown <= 0) {
-            this.tiretracks$sprayCooldown =
-                    Math.max(
-                            1,
-                            TireTracksConfig.sprayInterval()
-                    );
-
-            if (moved) {
-                WheelSpray.sprayAt(
-                        level,
-                        pos,
-                        state
-                );
-            }
-        }
-
-        if (--this.tiretracks$cooldown > 0) {
-            return;
-        }
-
-        this.tiretracks$cooldown =
-                Math.max(
-                        1,
-                        TireTracksConfig.tickInterval()
-                );
-
-        double vehicleMass =
-                tiretracks$getVehicleMass(
-                        level,
-                        pos
-                );
-
-        TerrainDeformer.deformAt(
-                level,
-                pos,
-                state,
-                vehicleMass
-        );
-    }
-
-    @Unique
-    private double tiretracks$getVehicleMass(
-            Level level,
-            BlockPos contactPos
-    ) {
-        /*
-         * The exact Sable API for total mass may differ between builds.
-         * First try to read the mass tracker through reflection.
-         * The value is in kilograms, matching the config thresholds.
-         */
-        try {
-            Class<?> sableClass =
-                    Class.forName(
-                            "dev.ryanhcode.sable.Sable"
-                    );
-
-            Field helperField =
-                    sableClass.getField("HELPER");
-
-            Object helper =
-                    helperField.get(null);
-
-            Method getContaining =
-                    tiretracks$findMethod(
-                            helper.getClass(),
-                            "getContaining",
-                            1
-                    );
-
-            if (getContaining != null) {
-                Object subLevel =
-                        getContaining.invoke(
-                                helper,
-                                this
-                        );
-
-                if (subLevel != null) {
-                    Method getMassTracker =
-                            tiretracks$findMethod(
-                                    subLevel.getClass(),
-                                    "getMassTracker",
-                                    0
-                            );
-
-                    if (getMassTracker != null) {
-                        Object massTracker =
-                                getMassTracker.invoke(
-                                        subLevel
-                                );
-
-                        Double totalMass =
-                                tiretracks$readMassValue(
-                                        massTracker
-                                );
-
-                        if (totalMass != null
-                                && totalMass > 0.0D) {
-                            return totalMass;
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-            /*
-             * Use fallback below.
-             */
-        }
-
-        /*
-         * If this Sable version does not expose a readable total mass,
-         * fall back to the middle of the medium band instead of breaking
-         * the game. Sits strictly above the light bound and at or below
-         * the medium bound, so it always resolves to the medium profile.
-         */
-        double lightBound =
-                TireTracksConfig.lightVehicleMaxMass();
-
-        double mediumBound =
-                Math.max(
-                        TireTracksConfig.mediumVehicleMaxMass(),
-                        lightBound
-                );
-
-        return Math.max(
-                Math.nextUp(lightBound),
-                (lightBound + mediumBound) * 0.5D
-        );
-    }
-
-    @Unique
-    private Double tiretracks$readMassValue(
-            Object massTracker
-    ) {
-        String[] methodNames = {
-                "getMass",
-                "mass",
-                "getTotalMass",
-                "getBodyMass",
-                "getNormalMass"
-        };
-
-        for (String methodName : methodNames) {
-            try {
-                Method method =
-                        massTracker.getClass()
-                                .getMethod(methodName);
-
-                Object value =
-                        method.invoke(massTracker);
-
-                if (value instanceof Number number) {
-                    return number.doubleValue();
-                }
-            } catch (Throwable ignored) {
-                /*
-                 * Try the next possible API name.
-                 */
-            }
-        }
-
-        return null;
-    }
-
-    @Unique
-    private Method tiretracks$findMethod(
-            Class<?> type,
-            String name,
-            int parameterCount
-    ) {
-        Class<?> current = type;
-
-        while (current != null) {
-            for (Method method : current.getDeclaredMethods()) {
-                if (method.getName().equals(name)
-                        && method.getParameterCount()
-                        == parameterCount) {
-                    method.setAccessible(true);
-                    return method;
-                }
-            }
-
-            current = current.getSuperclass();
-        }
-
-        return null;
     }
 }

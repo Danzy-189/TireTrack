@@ -15,6 +15,6 @@ public class TireTracks {
 
     public TireTracks(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.COMMON, TireTracksConfig.SPEC);
-        LOGGER.info("[TireTracks 3.0.0] loaded - wheels will now ruin your lawn.");
+        LOGGER.info("[TireTracks 3.1.0] loaded - wheels will now ruin your lawn, then pave it.");
     }
 }

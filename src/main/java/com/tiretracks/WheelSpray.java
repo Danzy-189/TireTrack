@@ -4,17 +4,30 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Cosmetic particles thrown up by a rolling wheel.
- * Purely visual: nothing here changes blocks or physics.
+ * Spray thrown up by a rolling wheel.
+ *
+ * <p>Surface classification comes from the datapack tags in
+ * {@link TireTracksTags}, so the particles always match what the terrain
+ * deformer thinks the ground is. Amount scales with how fast the wheel is
+ * actually travelling: a crawl produces a puff, full speed produces a
+ * cloud.</p>
+ *
+ * <p>Everything here is cosmetic with one exception: dusty ground at speed also
+ * raises a {@link DustVeil}, which does affect gameplay.</p>
  */
 public final class WheelSpray {
+
+    /**
+     * Density floor and ceiling relative to the configured base density.
+     */
+    private static final double MIN_DENSITY_FACTOR = 0.35D;
+    private static final double MAX_DENSITY_FACTOR = 1.6D;
 
     private WheelSpray() {
     }
@@ -22,14 +35,10 @@ public final class WheelSpray {
     public static void sprayAt(
             Level level,
             BlockPos contactPos,
-            BlockState contactState
+            BlockState contactState,
+            double speedBlocksPerSecond
     ) {
         if (!(level instanceof ServerLevel server)) {
-            return;
-        }
-
-        if (!TireTracksConfig.spawnParticles()
-                || !TireTracksConfig.wheelSpray()) {
             return;
         }
 
@@ -41,10 +50,13 @@ public final class WheelSpray {
             return;
         }
 
+        boolean particles = TireTracksConfig.spawnParticles()
+                && TireTracksConfig.wheelSpray();
+
         BlockPos abovePos = contactPos.above();
         BlockState aboveState = server.getBlockState(abovePos);
 
-        int density = Math.max(1, TireTracksConfig.sprayDensity());
+        int density = scaledDensity(speedBlocksPerSecond);
 
         boolean handled = true;
 
@@ -52,29 +64,54 @@ public final class WheelSpray {
          * The block above the contact point is checked first: a wheel driving
          * through shallow water or thin snow reports the solid block below it.
          */
-        if (isWater(aboveState)) {
-            spawnWater(server, abovePos, density);
-        } else if (isWater(contactState)) {
-            spawnWater(server, contactPos, density);
-        } else if (isSnow(aboveState)) {
-            spawnSnow(server, abovePos, density);
-        } else if (isSnow(contactState)) {
-            spawnSnow(server, contactPos, density);
-        } else if (isDusty(contactState)) {
-            spawnDust(server, contactPos, contactState, density);
-        } else if (isSoft(contactState)) {
-            spawnClods(server, contactPos, contactState, density);
+        if (Surfaces.isWater(aboveState)) {
+            if (particles) {
+                spawnWater(server, abovePos, density);
+            }
+        } else if (Surfaces.isWater(contactState)) {
+            if (particles) {
+                spawnWater(server, contactPos, density);
+            }
+        } else if (Surfaces.isSnow(aboveState)) {
+            if (particles) {
+                spawnSnow(server, abovePos, density);
+            }
+        } else if (Surfaces.isSnow(contactState)) {
+            if (particles) {
+                spawnSnow(server, contactPos, density);
+            }
+        } else if (Surfaces.isDusty(contactState)) {
+            if (particles) {
+                spawnDust(server, contactPos, contactState, density);
+            }
+
+            /*
+             * Gated by its own config option rather than by wheelSpray, since a
+             * blinding cloud is a gameplay effect and not decoration.
+             */
+            DustVeil.trigger(
+                    server,
+                    contactPos,
+                    contactState,
+                    speedBlocksPerSecond
+            );
+        } else if (Surfaces.isSoft(contactState)) {
+            if (particles) {
+                spawnClods(server, contactPos, contactState, density);
+            }
         } else if (!contactState.isAir()
                 && contactState.getFluidState().isEmpty()) {
             /*
              * Stone, wood, concrete and so on: just a faint scuff.
              */
-            spawnDust(
-                    server,
-                    contactPos,
-                    contactState,
-                    Math.max(1, density / 2)
-            );
+            if (particles) {
+                spawnDust(
+                        server,
+                        contactPos,
+                        contactState,
+                        Math.max(1, density / 2)
+                );
+            }
         } else {
             handled = false;
         }
@@ -82,7 +119,7 @@ public final class WheelSpray {
         /*
          * Rain adds water spray on top of whatever the surface throws up.
          */
-        if (server.isRainingAt(abovePos)) {
+        if (particles && server.isRainingAt(abovePos)) {
             spawnRainSpray(
                     server,
                     contactPos,
@@ -93,36 +130,25 @@ public final class WheelSpray {
         }
     }
 
-    private static boolean isWater(BlockState state) {
-        return state.getFluidState().is(FluidTags.WATER);
-    }
+    /**
+     * Base density scaled by wheel speed, clamped so slow driving still shows
+     * something and top speed cannot flood the client with particles.
+     */
+    private static int scaledDensity(double speedBlocksPerSecond) {
+        int density = Math.max(1, TireTracksConfig.sprayDensity());
 
-    private static boolean isSnow(BlockState state) {
-        return state.is(Blocks.SNOW)
-                || state.is(Blocks.SNOW_BLOCK)
-                || state.is(Blocks.POWDER_SNOW);
-    }
+        double fullSpeed = Math.max(
+                0.1D,
+                TireTracksConfig.sprayFullSpeed()
+        );
 
-    private static boolean isDusty(BlockState state) {
-        return state.is(BlockTags.SAND)
-                || state.is(Blocks.GRAVEL)
-                || state.is(Blocks.DIRT_PATH)
-                || state.is(Blocks.COARSE_DIRT)
-                || state.is(Blocks.SOUL_SAND)
-                || state.is(Blocks.SOUL_SOIL);
-    }
+        double factor = Mth.clamp(
+                speedBlocksPerSecond / fullSpeed,
+                MIN_DENSITY_FACTOR,
+                MAX_DENSITY_FACTOR
+        );
 
-    private static boolean isSoft(BlockState state) {
-        return state.is(BlockTags.DIRT)
-                || state.is(Blocks.CLAY)
-                || state.is(Blocks.FARMLAND);
-    }
-
-    private static boolean isWet(BlockState state) {
-        return state.is(Blocks.MUD)
-                || state.is(Blocks.MUDDY_MANGROVE_ROOTS)
-                || state.is(Blocks.CLAY)
-                || state.is(Blocks.FARMLAND);
+        return Math.max(1, (int) Math.round(density * factor));
     }
 
     /*
@@ -159,7 +185,7 @@ public final class WheelSpray {
     }
 
     /*
-     * Snow: a puff of snowflakes plus torn-up snow bits.
+     * Snow: a puff of snowflakes plus torn up snow bits.
      */
     private static void spawnSnow(
             ServerLevel level,
@@ -255,7 +281,7 @@ public final class WheelSpray {
                 0.06D
         );
 
-        if (isWet(state)) {
+        if (Surfaces.isWet(state)) {
             level.sendParticles(
                     ParticleTypes.SPLASH,
                     pos.getX() + 0.5D,

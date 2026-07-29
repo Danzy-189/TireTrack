@@ -1,1 +1,10 @@
-{ "pack": { "description": "TireTracks", "pack_format": 34 } }
+{
+  "pack": {
+    "description": "TireTracks",
+    "pack_format": 34,
+    "supported_formats": {
+      "min_inclusive": 15,
+      "max_inclusive": 99
+    }
+  }
+}
