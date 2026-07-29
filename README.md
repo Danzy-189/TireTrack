@@ -3,7 +3,8 @@
 TireTracks makes Create Aeronautics vehicles (Offroad / Sable / Simulated) leave real marks on the world.
 Ground does not just change once and stay that way: it wears down stage by stage into a rut, snow is packed
 into an ice road instead of vanishing, wheels throw up surface appropriate spray, and mud gets dragged onto
-clean ground for a few blocks.
+clean ground for a few blocks. **Roads have a life cycle**: abandoned puddles evaporate, abandoned mud heals
+back to grass, but actively used tracks stay as they are.
 
 - Minecraft 1.21.1, NeoForge 21.1.235, Java 21
 - Version 3.1.0
@@ -64,6 +65,33 @@ terrain.
 - **Light vehicles** leave no trace.
 - **Medium and heavy vehicles** crack stone into cobblestone or andesite, chosen at random. The mix keeps the
   track from looking artificial.
+
+## Road healing
+
+Abandoned roads slowly return to nature. Actively used roads — anything touched by wheels recently — stay as
+they are.
+
+### Puddles evaporate
+
+Puddles (water or ice in a rut) turn back into mud if it does not rain on them for 1 day (real world time, 24
+hours). In hot biomes (base temperature 0.95 and up), evaporation is twice as fast: 12 hours.
+
+Rain falling on a puddle resets the timer, so a rainy season keeps puddles filled. The mechanic exists so the
+world does not turn into a permanent swamp, and so roads have a life cycle: a track through a desert dries out
+quickly, a track through a swamp stays wet.
+
+### Mud heals back to grass
+
+Mud, coarse dirt and dirt paths can heal back toward grass **during rain**, if they have not been touched by
+wheels for 3 days (real world time, 72 hours). The chance per check is 8%, so healing is gradual. Healed blocks
+turn into grass if there is grass nearby (within 3 blocks), otherwise into plain dirt.
+
+Wheels reset the timer, so an active road never heals. This means your main routes stay as roads, while
+abandoned side paths slowly vanish.
+
+Both timers are in-memory and reset when a chunk unloads or the server restarts. This is intentional: the
+mechanic is about ongoing activity, not forensic history. A chunk that stays loaded for days will heal or
+evaporate as expected; a chunk that is only loaded for minutes at a time will take longer.
 
 ## Wet and dry ground
 
@@ -199,6 +227,17 @@ Blocks with a block entity are always protected, so a chest or a machine is neve
 | `carryEnabled` | true | drag mud onto clean ground |
 | `carryDistance` | 6 | blocks of clean ground that still show a trail |
 
+### `[healing]`
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `puddlesEvaporate` | true | puddles turn into mud in dry weather |
+| `puddleEvaporationDays` | 1.0 | days without rain before a puddle evaporates |
+| `hotBiomeEvaporationMultiplier` | 2.0 | evaporation speed multiplier in hot biomes |
+| `mudHeals` | true | mud/coarse dirt/paths heal back to grass during rain |
+| `mudHealChance` | 0.08 | chance per check that an untouched rut heals one stage |
+| `mudHealDays` | 3.0 | days a rut must be untouched before it can heal |
+
 Upgrading from 3.0 moves `eatSnow` and `snowToMudChance` from `[general]` into `[snow]`, and drops `playSounds`
 along with the whole `[dust]` section. Delete the old config file to regenerate it cleanly, otherwise the
 removed keys just sit there unused.
@@ -219,6 +258,8 @@ removed keys just sit there unused.
    with speed. Lower `sprayFullSpeed` if you want thick spray while crawling.
 7. **Sand should not sink / stone should not crack.** Add `minecraft:sand`, `minecraft:red_sand`, or `minecraft:stone`
    to `#tiretracks:immune`.
+8. **Roads heal too fast / too slow.** Adjust `puddleEvaporationDays`, `mudHealDays`, and `mudHealChance`. Set
+   `puddlesEvaporate = false` or `mudHeals = false` to disable healing entirely.
 
 ## Building
 
