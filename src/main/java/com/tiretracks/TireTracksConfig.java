@@ -376,7 +376,7 @@ public final class TireTracksConfig {
                     "Only applies during rain, after mudHealDays have passed without wheel contact."
             ).defineInRange(
                     "mudHealChance",
-                    0.08D,
+                    0.6D,
                     0.0D,
                     1.0D
             );

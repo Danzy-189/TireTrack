@@ -84,8 +84,9 @@ quickly, a track through a swamp stays wet.
 ### Mud heals back to grass
 
 Mud, coarse dirt and dirt paths can heal back toward grass **during rain**, if they have not been touched by
-wheels for **3 Minecraft days** (1 hour real time). The chance per check is 8%, so healing is gradual. Healed
-blocks turn into grass if there is grass nearby (within 3 blocks), otherwise into plain dirt.
+wheels for **3 Minecraft days** (1 hour real time). The chance per check is 60%, so healing is reasonably quick
+once the timer expires. Healed blocks turn into grass if there is grass nearby (within 3 blocks), otherwise into
+plain dirt.
 
 Wheels reset the timer, so an active road never heals. This means your main routes stay as roads, while
 abandoned side paths slowly vanish.
@@ -238,7 +239,7 @@ Blocks with a block entity are always protected, so a chest or a machine is neve
 | `puddleEvaporationDays` | 1.0 | Minecraft days without rain before a puddle evaporates (20 min real time) |
 | `hotBiomeEvaporationMultiplier` | 2.0 | evaporation speed multiplier in hot biomes |
 | `mudHeals` | true | mud/coarse dirt/paths heal back to grass during rain |
-| `mudHealChance` | 0.08 | chance per check that an untouched rut heals one stage |
+| `mudHealChance` | 0.6 | chance per check that an untouched rut heals one stage (60%) |
 | `mudHealDays` | 3.0 | Minecraft days a rut must be untouched before it can heal (1 hour real time) |
 
 Upgrading from 3.0 moves `eatSnow` and `snowToMudChance` from `[general]` into `[snow]`, and drops `playSounds`
