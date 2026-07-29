@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * healing. This spreads the cost evenly and ensures every block eventually gets
  * checked without scanning the entire world.</p>
  */
-@EventBusSubscriber(modid = TireTracks.MODID, bus = EventBusSubscriber.Bus.GAME)
+@EventBusSubscriber(modid = TireTracks.MODID)
 public final class RoadHealing {
 
     /**
@@ -101,10 +101,10 @@ public final class RoadHealing {
          * Pick a few random blocks in each loaded chunk and check them for
          * healing. This spreads the cost evenly and ensures eventual coverage.
          */
-        for (LevelChunk chunk : level.getChunkSource().chunkMap.getChunks()) {
-            if (!chunk.isEmpty()) {
-                tickChunk(level, chunk);
-            }
+        Iterable<LevelChunk> chunks = level.getChunkSource().getLoadedChunks();
+
+        for (LevelChunk chunk : chunks) {
+            tickChunk(level, chunk);
         }
     }
 
