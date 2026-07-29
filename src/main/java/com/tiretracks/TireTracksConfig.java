@@ -36,6 +36,10 @@ public final class TireTracksConfig {
         public final ModConfigSpec.BooleanValue playSounds;
         public final ModConfigSpec.BooleanValue spawnParticles;
 
+        public final ModConfigSpec.BooleanValue wheelSpray;
+        public final ModConfigSpec.IntValue sprayInterval;
+        public final ModConfigSpec.IntValue sprayDensity;
+
         private Common(ModConfigSpec.Builder builder) {
             builder.comment(
                     "TireTracks terrain deformation settings.",
@@ -126,9 +130,46 @@ public final class TireTracksConfig {
                     true
             );
 
-            spawnParticles = builder.define(
+            spawnParticles = builder.comment(
+                    "Master switch for every particle this mod spawns."
+            ).define(
                     "spawnParticles",
                     true
+            );
+
+            builder.pop();
+
+            builder.comment(
+                    "Cosmetic spray thrown up by rolling wheels.",
+                    "Water and rain give splashes, sand and gravel give dust plumes,",
+                    "snow gives snowflakes, soil gives flying clods.",
+                    "Requires spawnParticles = true."
+            ).push("spray");
+
+            wheelSpray = builder.comment(
+                    "Whether wheels throw up surface particles while driving."
+            ).define(
+                    "wheelSpray",
+                    true
+            );
+
+            sprayInterval = builder.comment(
+                    "Number of physics ticks between spray puffs per wheel.",
+                    "Spray is also skipped while a wheel stays on the same block, so a parked vehicle is quiet."
+            ).defineInRange(
+                    "sprayInterval",
+                    2,
+                    1,
+                    200
+            );
+
+            sprayDensity = builder.comment(
+                    "Particle amount multiplier per puff. Raise for thicker spray, lower for performance."
+            ).defineInRange(
+                    "sprayDensity",
+                    2,
+                    1,
+                    20
             );
 
             builder.pop();
@@ -173,5 +214,17 @@ public final class TireTracksConfig {
 
     public static boolean spawnParticles() {
         return COMMON.spawnParticles.get();
+    }
+
+    public static boolean wheelSpray() {
+        return COMMON.wheelSpray.get();
+    }
+
+    public static int sprayInterval() {
+        return COMMON.sprayInterval.get();
+    }
+
+    public static int sprayDensity() {
+        return COMMON.sprayDensity.get();
     }
 }

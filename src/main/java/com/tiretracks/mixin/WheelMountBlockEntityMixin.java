@@ -2,6 +2,7 @@ package com.tiretracks.mixin;
 
 import com.tiretracks.TerrainDeformer;
 import com.tiretracks.TireTracksConfig;
+import com.tiretracks.WheelSpray;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,6 +24,12 @@ public abstract class WheelMountBlockEntityMixin {
 
     @Unique
     private int tiretracks$cooldown = 0;
+
+    @Unique
+    private int tiretracks$sprayCooldown = 0;
+
+    @Unique
+    private long tiretracks$lastContactPos = Long.MIN_VALUE;
 
     @Redirect(
             method = "sable$physicsTick",
@@ -47,26 +54,11 @@ public abstract class WheelMountBlockEntityMixin {
 
         try {
             if (!level.isClientSide) {
-                if (--this.tiretracks$cooldown <= 0) {
-                    this.tiretracks$cooldown =
-                            Math.max(
-                                    1,
-                                    TireTracksConfig.tickInterval()
-                            );
-
-                    double vehicleMass =
-                            tiretracks$getVehicleMass(
-                                    level,
-                                    pos
-                            );
-
-                    TerrainDeformer.deformAt(
-                            level,
-                            pos,
-                            state,
-                            vehicleMass
-                    );
-                }
+                tiretracks$handleContact(
+                        level,
+                        pos,
+                        state
+                );
             }
         } catch (Throwable ignored) {
             /*
@@ -75,6 +67,63 @@ public abstract class WheelMountBlockEntityMixin {
         }
 
         return state;
+    }
+
+    @Unique
+    private void tiretracks$handleContact(
+            Level level,
+            BlockPos pos,
+            BlockState state
+    ) {
+        /*
+         * A wheel that stays inside the same block is either parked or barely
+         * creeping, so spray is suppressed to avoid particle spam.
+         */
+        long packedPos = pos.asLong();
+
+        boolean moved =
+                packedPos != this.tiretracks$lastContactPos;
+
+        this.tiretracks$lastContactPos = packedPos;
+
+        if (--this.tiretracks$sprayCooldown <= 0) {
+            this.tiretracks$sprayCooldown =
+                    Math.max(
+                            1,
+                            TireTracksConfig.sprayInterval()
+                    );
+
+            if (moved) {
+                WheelSpray.sprayAt(
+                        level,
+                        pos,
+                        state
+                );
+            }
+        }
+
+        if (--this.tiretracks$cooldown > 0) {
+            return;
+        }
+
+        this.tiretracks$cooldown =
+                Math.max(
+                        1,
+                        TireTracksConfig.tickInterval()
+                );
+
+        double vehicleMass =
+                tiretracks$getVehicleMass(
+                        level,
+                        pos
+                );
+
+        TerrainDeformer.deformAt(
+                level,
+                pos,
+                state,
+                vehicleMass
+        );
     }
 
     @Unique
