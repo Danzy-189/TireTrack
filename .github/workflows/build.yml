@@ -27,5 +27,5 @@ jobs:
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
-          name: TireTracks-3.0.0
+          name: TireTracks-3.1.0
           path: build/libs/*.jar
