@@ -69,29 +69,30 @@ terrain.
 ## Road healing
 
 Abandoned roads slowly return to nature. Actively used roads — anything touched by wheels recently — stay as
-they are.
+they are. Time is measured in **Minecraft days**: 1 day = 24000 ticks = 20 minutes real time.
 
 ### Puddles evaporate
 
-Puddles (water or ice in a rut) turn back into mud if it does not rain on them for 1 day (real world time, 24
-hours). In hot biomes (base temperature 0.95 and up), evaporation is twice as fast: 12 hours.
+Puddles (water or ice in a rut) turn back into mud if it does not rain on them for **1 Minecraft day** (20
+minutes real time). In hot biomes (base temperature 0.95 and up), evaporation is twice as fast: 0.5 days (10
+minutes).
 
-Rain falling on a puddle resets the timer, so a rainy season keeps puddles filled. The mechanic exists so the
+Rain falling on a puddle resets the timer, so a rainy stretch keeps puddles filled. The mechanic exists so the
 world does not turn into a permanent swamp, and so roads have a life cycle: a track through a desert dries out
 quickly, a track through a swamp stays wet.
 
 ### Mud heals back to grass
 
 Mud, coarse dirt and dirt paths can heal back toward grass **during rain**, if they have not been touched by
-wheels for 3 days (real world time, 72 hours). The chance per check is 8%, so healing is gradual. Healed blocks
-turn into grass if there is grass nearby (within 3 blocks), otherwise into plain dirt.
+wheels for **3 Minecraft days** (1 hour real time). The chance per check is 8%, so healing is gradual. Healed
+blocks turn into grass if there is grass nearby (within 3 blocks), otherwise into plain dirt.
 
 Wheels reset the timer, so an active road never heals. This means your main routes stay as roads, while
 abandoned side paths slowly vanish.
 
-Both timers are in-memory and reset when a chunk unloads or the server restarts. This is intentional: the
-mechanic is about ongoing activity, not forensic history. A chunk that stays loaded for days will heal or
-evaporate as expected; a chunk that is only loaded for minutes at a time will take longer.
+Both timers are in-memory and reset when a chunk unloads. This is intentional: the mechanic is about ongoing
+activity, not forensic history. A chunk that stays loaded will heal or evaporate as expected; a chunk that is
+only loaded briefly will take longer.
 
 ## Wet and dry ground
 
@@ -229,14 +230,16 @@ Blocks with a block entity are always protected, so a chest or a machine is neve
 
 ### `[healing]`
 
+**Time is measured in Minecraft days. 1 day = 24000 ticks = 20 minutes real time.**
+
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `puddlesEvaporate` | true | puddles turn into mud in dry weather |
-| `puddleEvaporationDays` | 1.0 | days without rain before a puddle evaporates |
+| `puddleEvaporationDays` | 1.0 | Minecraft days without rain before a puddle evaporates (20 min real time) |
 | `hotBiomeEvaporationMultiplier` | 2.0 | evaporation speed multiplier in hot biomes |
 | `mudHeals` | true | mud/coarse dirt/paths heal back to grass during rain |
 | `mudHealChance` | 0.08 | chance per check that an untouched rut heals one stage |
-| `mudHealDays` | 3.0 | days a rut must be untouched before it can heal |
+| `mudHealDays` | 3.0 | Minecraft days a rut must be untouched before it can heal (1 hour real time) |
 
 Upgrading from 3.0 moves `eatSnow` and `snowToMudChance` from `[general]` into `[snow]`, and drops `playSounds`
 along with the whole `[dust]` section. Delete the old config file to regenerate it cleanly, otherwise the

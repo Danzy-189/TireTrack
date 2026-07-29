@@ -332,7 +332,8 @@ public final class TireTracksConfig {
             builder.comment(
                     "Road healing: abandoned roads slowly return to nature.",
                     "Puddles evaporate in dry weather, mud heals back to turf during rain.",
-                    "Actively used roads stay as they are; only neglected stretches heal."
+                    "Actively used roads stay as they are; only neglected stretches heal.",
+                    "Time is measured in Minecraft days (1 day = 24000 ticks = 20 minutes real time)."
             ).push("healing");
 
             puddlesEvaporate = builder.comment(
@@ -343,7 +344,8 @@ public final class TireTracksConfig {
             );
 
             puddleEvaporationDays = builder.comment(
-                    "Real-world days without rain before a puddle evaporates. Raining on the block resets the timer.",
+                    "Minecraft days without rain before a puddle evaporates. Raining on the block resets the timer.",
+                    "1 Minecraft day = 24000 ticks = 20 minutes real time.",
                     "Hot biomes (base temperature >= dryBiomeTemperature) evaporate faster, see hotBiomeEvaporationMultiplier."
             ).defineInRange(
                     "puddleEvaporationDays",
@@ -380,7 +382,8 @@ public final class TireTracksConfig {
             );
 
             mudHealDays = builder.comment(
-                    "Real-world days a rut must be untouched before it can start healing.",
+                    "Minecraft days a rut must be untouched before it can start healing.",
+                    "1 Minecraft day = 24000 ticks = 20 minutes real time.",
                     "Wheels reset the timer, so active roads never heal."
             ).defineInRange(
                     "mudHealDays",

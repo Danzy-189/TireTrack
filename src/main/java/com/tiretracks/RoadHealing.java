@@ -20,8 +20,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * turf during rain if untouched for long enough.
  *
  * <p>Touch time tracking is in-memory only and clears when a chunk unloads, so
- * healing timers reset on server restart or chunk reload. This is acceptable:
- * the mechanic is about ongoing activity, not forensic history.</p>
+ * healing timers reset on chunk reload. This is acceptable: the mechanic is
+ * about ongoing activity, not forensic history.</p>
+ *
+ * <p>Time is measured in game ticks, not real-world time. 1 game day = 24000
+ * ticks = 20 minutes real time. This makes healing observable within a play
+ * session and feels Minecraft-native.</p>
  *
  * <p>Healing checks use a random tick style: every server tick, the system picks
  * a few random positions in each loaded chunk and checks whether they need
@@ -38,8 +42,13 @@ public final class RoadHealing {
     private static final int CHECKS_PER_CHUNK_PER_SECOND = 10;
 
     /**
-     * Last touch time (in milliseconds since epoch) for deformed blocks.
-     * Keyed by chunk, then by local block position.
+     * Ticks per Minecraft day.
+     */
+    private static final long TICKS_PER_DAY = 24000L;
+
+    /**
+     * Last touch time (in game ticks, from level.getDayTime()) for deformed
+     * blocks. Keyed by chunk, then by local block position.
      */
     private static final Map<ChunkPos, Map<BlockPos, Long>> LAST_TOUCH =
             new ConcurrentHashMap<>();
@@ -55,14 +64,14 @@ public final class RoadHealing {
 
         LAST_TOUCH
                 .computeIfAbsent(chunkPos, k -> new ConcurrentHashMap<>())
-                .put(pos, System.currentTimeMillis());
+                .put(pos, level.getDayTime());
     }
 
     /**
-     * How long ago the block was last touched, in milliseconds. Returns
+     * How long ago the block was last touched, in game ticks. Returns
      * Long.MAX_VALUE if never touched (allowing it to heal immediately).
      */
-    private static long timeSinceTouch(BlockPos pos) {
+    private static long ticksSinceTouch(ServerLevel level, BlockPos pos) {
         ChunkPos chunkPos = new ChunkPos(pos);
 
         Map<BlockPos, Long> chunkData = LAST_TOUCH.get(chunkPos);
@@ -77,7 +86,7 @@ public final class RoadHealing {
             return Long.MAX_VALUE;
         }
 
-        return System.currentTimeMillis() - lastTouch;
+        return level.getDayTime() - lastTouch;
     }
 
     @SubscribeEvent
@@ -111,7 +120,7 @@ public final class RoadHealing {
         if (random.nextDouble() >= checksThisTick) {
             return;
         }
-        
+
         /*
          * Pick a random column in the chunk, scan it for healable blocks.
          */
@@ -177,7 +186,7 @@ public final class RoadHealing {
             return;
         }
 
-        long sinceTouch = timeSinceTouch(pos);
+        long sinceTouch = ticksSinceTouch(level, pos);
 
         double evaporationDays = TireTracksConfig.puddleEvaporationDays();
 
@@ -192,9 +201,9 @@ public final class RoadHealing {
             evaporationDays /= TireTracksConfig.hotBiomeEvaporationMultiplier();
         }
 
-        long evaporationMs = (long) (evaporationDays * 24.0D * 60.0D * 60.0D * 1000.0D);
+        long evaporationTicks = (long) (evaporationDays * TICKS_PER_DAY);
 
-        if (sinceTouch < evaporationMs) {
+        if (sinceTouch < evaporationTicks) {
             return;
         }
 
@@ -227,13 +236,13 @@ public final class RoadHealing {
             return;
         }
 
-        long sinceTouch = timeSinceTouch(pos);
+        long sinceTouch = ticksSinceTouch(level, pos);
 
         double healDays = TireTracksConfig.mudHealDays();
 
-        long healMs = (long) (healDays * 24.0D * 60.0D * 60.0D * 1000.0D);
+        long healTicks = (long) (healDays * TICKS_PER_DAY);
 
-        if (sinceTouch < healMs) {
+        if (sinceTouch < healTicks) {
             return;
         }
 
