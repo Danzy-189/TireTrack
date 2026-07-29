@@ -39,28 +39,29 @@ public final class TireTracksConfig {
         private Common(ModConfigSpec.Builder builder) {
             builder.comment(
                     "TireTracks terrain deformation settings.",
-                    "Mass is measured in kilograms when Sable exposes total vehicle mass.",
-                    "If total mass cannot be read, the effective wheel mass is used as fallback."
+                    "Mass is measured in kilograms on the same scale Create Aeronautics (Sable) uses.",
+                    "Default profiles: 0-45 kg light, 46-80 kg medium, above 80 kg heavy.",
+                    "If total mass cannot be read, the medium profile is used as fallback."
             ).push("general");
 
             lightVehicleMaxMass = builder.comment(
-                    "Maximum mass of a light vehicle.",
-                    "Vehicles below this value use the light profile."
+                    "Upper mass bound of a light vehicle, in kilograms.",
+                    "Vehicles up to and including this value use the light profile."
             ).defineInRange(
                     "lightVehicleMaxMass",
-                    500.0D,
-                    1.0D,
+                    45.0D,
+                    0.0D,
                     100000.0D
             );
 
             mediumVehicleMaxMass = builder.comment(
-                    "Maximum mass of a medium vehicle.",
-                    "Vehicles from lightVehicleMaxMass up to this value use the medium profile.",
+                    "Upper mass bound of a medium vehicle, in kilograms.",
+                    "Vehicles above lightVehicleMaxMass up to and including this value use the medium profile.",
                     "Vehicles above this value use the heavy profile."
             ).defineInRange(
                     "mediumVehicleMaxMass",
-                    1500.0D,
-                    1.0D,
+                    80.0D,
+                    0.0D,
                     100000.0D
             );
 

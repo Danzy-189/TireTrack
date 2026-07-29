@@ -21,8 +21,6 @@ import java.lang.reflect.Method;
 )
 public abstract class WheelMountBlockEntityMixin {
 
-    
-
     @Unique
     private int tiretracks$cooldown = 0;
 
@@ -87,6 +85,7 @@ public abstract class WheelMountBlockEntityMixin {
         /*
          * The exact Sable API for total mass may differ between builds.
          * First try to read the mass tracker through reflection.
+         * The value is in kilograms, matching the config thresholds.
          */
         try {
             Class<?> sableClass =
@@ -148,10 +147,23 @@ public abstract class WheelMountBlockEntityMixin {
 
         /*
          * If this Sable version does not expose a readable total mass,
-         * use a safe medium profile instead of breaking the game.
+         * fall back to the middle of the medium band instead of breaking
+         * the game. Sits strictly above the light bound and at or below
+         * the medium bound, so it always resolves to the medium profile.
          */
-        return TireTracksConfig.mediumVehicleMaxMass()
-                * 0.5D;
+        double lightBound =
+                TireTracksConfig.lightVehicleMaxMass();
+
+        double mediumBound =
+                Math.max(
+                        TireTracksConfig.mediumVehicleMaxMass(),
+                        lightBound
+                );
+
+        return Math.max(
+                Math.nextUp(lightBound),
+                (lightBound + mediumBound) * 0.5D
+        );
     }
 
     @Unique

@@ -72,16 +72,21 @@ public final class TerrainDeformer {
         }
     }
 
+    /*
+     * Mass is in kilograms, on the same scale Create Aeronautics reports.
+     * With default config: 0-45 kg light, 46-80 kg medium, above 80 kg heavy.
+     * Both bounds are inclusive.
+     */
     public static VehicleClass getVehicleClass(double mass) {
         if (!Double.isFinite(mass) || mass <= 0.0D) {
             return VehicleClass.MEDIUM;
         }
 
-        if (mass < TireTracksConfig.lightVehicleMaxMass()) {
+        if (mass <= TireTracksConfig.lightVehicleMaxMass()) {
             return VehicleClass.LIGHT;
         }
 
-        if (mass < TireTracksConfig.mediumVehicleMaxMass()) {
+        if (mass <= TireTracksConfig.mediumVehicleMaxMass()) {
             return VehicleClass.MEDIUM;
         }
 
