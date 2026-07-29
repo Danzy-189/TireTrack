@@ -11,7 +11,7 @@ description = '''
 Wheels from Create Aeronautics (Offroad / Sable / Simulated) leave real marks on the world.
 Ground wears down stage by stage into a rut, from turf to a footpath to coarse dirt to mud,
 gravel or sand, and a soaked rut can fill with water or freeze into ice.
-Snow is not eaten but packed into the ground as packed snow and polished into an ice road.
+Snow is not eaten but driven into the ground as ice and polished into a packed ice road.
 Wheels throw up water, snow, dust or clods, drag mud onto clean ground for a few blocks,
 and a fast run over dry ground raises a dust veil that blinds whoever is chasing you.
 Which blocks count as which surface is decided by block tags, so any pack can extend it.

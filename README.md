@@ -56,7 +56,8 @@ Moisture decides both how fast the ground gives way and what it turns into at st
 ## Puddles
 
 A fully worn mud rut in the rain can fill with water, and in a freezing biome it becomes ice instead, so last
-season's track turns into this winter's slippery spot.
+season's track turns into this winter's slippery spot. A frozen puddle then keeps progressing along the snow
+chain below and can be polished into packed ice.
 
 A puddle is only created when the rut has a solid floor and solid ground on all four sides. Water can never run
 off across the landscape or down a slope.
@@ -68,9 +69,13 @@ ruining it: drive the same line often enough and you groom yourself a fast ice r
 
 1. Snow blocks and powder snow collapse into a seven layer stack.
 2. Each further pass shaves one layer off.
-3. The last layer is driven into the ground, which becomes packed snow flush with the surface, so there is no
-   bump for the suspension.
-4. Further passes polish packed snow into ice.
+3. The last layer is driven into the ground, and the ground below becomes ice, flush with the surface, so there
+   is no bump for the suspension.
+4. Further passes polish that ice into packed ice, which never melts.
+
+Vanilla has no packed snow block, and a snow block cannot play that role either: it is already the entry point
+of this chain, so a groomed track would collapse back into loose layers forever. Ice never turns back into snow
+and is genuinely faster to drive on.
 
 Packing only happens in biomes cold enough to keep it (base temperature below 0.15). In warmer places, or with
 `packSnow = false`, the last layer simply disappears and may leave mud behind, which is the old 3.0 behaviour.
@@ -81,7 +86,7 @@ Packing only happens in biomes cold enough to keep it (base temperature below 0.
 | --- | --- |
 | Water, shallow or deep | splashes and bubbles |
 | Rain, on any surface | extra droplets flicked off the tread |
-| Snow, packed snow, powder snow | snowflakes and snow crumbs |
+| Snow, ice, powder snow | snowflakes and snow crumbs |
 | `#tiretracks:dusty` | dust plume tinted with the block |
 | `#tiretracks:soft` | flying clods, plus splashes on wet ground |
 | Stone, wood, concrete and so on | a faint scuff |
@@ -124,9 +129,9 @@ by any datapack or modpack.
 | `#tiretracks:soft` | loose soil, throws up clods |
 | `#tiretracks:dusty` | dry granular ground, raises dust and can raise a dust veil |
 | `#tiretracks:wet` | wet ground: splashes instead of dust, sticks to tyres |
-| `#tiretracks:snow` | treated as a snow surface |
+| `#tiretracks:snow` | treated as a snow surface, including the ice a groomed track turns into |
 | `#tiretracks:muddyable` | ground the last snow layer may turn into mud |
-| `#tiretracks:packable_ground` | ground that may be replaced by packed snow |
+| `#tiretracks:packable_ground` | ground that may be turned into an ice track |
 
 Blocks with a block entity are always protected, so a chest or a machine is never ground into mud.
 
@@ -164,8 +169,8 @@ Blocks with a block entity are always protected, so a chest or a machine is neve
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `eatSnow` | true | whether wheels affect snow at all |
-| `packSnow` | true | pack snow into a track instead of removing it |
-| `snowToIceChance` | 0.35 | chance per check that packed snow becomes ice |
+| `packSnow` | true | pack snow into an ice track instead of removing it |
+| `snowToIceChance` | 0.35 | chance per check that a groomed ice track is polished into packed ice |
 | `snowToMudChance` | 0.25 | chance the last layer leaves mud, where packing is impossible |
 
 ### `[spray]`
@@ -207,9 +212,11 @@ file to regenerate it cleanly, otherwise the old keys just sit there unused.
    `lightVehicleMaxMass` and `mediumVehicleMaxMass` to match what you actually see.
 4. **Too destructive.** Lower the chances, cap the stages with `lightMaxStage` and friends, or add blocks to
    `#tiretracks:immune`.
-5. **Few particles at very low speed.** Expected: spray needs the wheel to enter a new block, and density scales
+5. **I do not want ice roads.** Set `packSnow = false`, or remove `minecraft:ice` from `#tiretracks:snow` to stop
+   the polishing step while keeping the rest.
+6. **Few particles at very low speed.** Expected: spray needs the wheel to enter a new block, and density scales
    with speed. Lower `sprayFullSpeed` if you want thick spray while crawling.
-6. **My own driver keeps getting blinded.** Raise `dustVeilSelfRadius`, or set `dustVeil = false` to keep the
+7. **My own driver keeps getting blinded.** Raise `dustVeilSelfRadius`, or set `dustVeil = false` to keep the
    cloud purely cosmetic.
 
 ## Building
