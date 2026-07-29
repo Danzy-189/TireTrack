@@ -13,38 +13,47 @@ import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 
-/**
- * All the "wheels ruin the ground" logic. Fed by the wheel mount mixin with the exact block
- * the suspension raycast is standing on.
- */
 public final class TerrainDeformer {
 
-    private TerrainDeformer() {}
+    private TerrainDeformer() {
+    }
 
-    /** What turf can turn into. Equal weights: sand, dirt, mud, gravel, coarse dirt. */
-    private static final Block[] CHURNED = {
-            Blocks.SAND,
-            Blocks.DIRT,
-            Blocks.MUD,
-            Blocks.GRAVEL,
-            Blocks.COARSE_DIRT
-    };
+    public enum VehicleClass {
+        LIGHT,
+        MEDIUM,
+        HEAVY
+    }
 
-    /**
-     * @param level the level the wheel raycast hit in
-     * @param pos   the block the wheel is resting on
-     */
-    public static void deformAt(Level level, BlockPos pos, BlockState state) {
-        if (!(level instanceof ServerLevel server)) return;
-        if (pos == null || state == null || state.isAir()) return;
-        if (!server.isLoaded(pos)) return;
+    public static void deformAt(
+            Level level,
+            BlockPos pos,
+            BlockState state,
+            double vehicleMass
+    ) {
+        if (!(level instanceof ServerLevel server)) {
+            return;
+        }
 
-        // A single snow layer has no collision, so the suspension raycast reports the block
-        // UNDER it. Check upwards first so thin snow still gets eaten.
-        BlockPos above = pos.above();
-        BlockState aboveState = server.getBlockState(above);
+        if (pos == null || state == null || state.isAir()) {
+            return;
+        }
+
+        if (!server.isLoaded(pos)) {
+            return;
+        }
+
+        VehicleClass vehicleClass =
+                getVehicleClass(vehicleMass);
+
+        /*
+         * A single snow layer has no collision. The wheel raycast therefore
+         * usually hits the block below it, so check the block above first.
+         */
+        BlockPos abovePos = pos.above();
+        BlockState aboveState = server.getBlockState(abovePos);
+
         if (isSnow(aboveState)) {
-            crushSnow(server, above, aboveState);
+            crushSnow(server, abovePos, aboveState);
             return;
         }
 
@@ -54,77 +63,219 @@ public final class TerrainDeformer {
         }
 
         if (isTurf(state)) {
-            churnTurf(server, pos, state);
+            churnTurf(
+                    server,
+                    pos,
+                    state,
+                    vehicleClass
+            );
         }
     }
 
-    // ------------------------------------------------------------------ turf
+    public static VehicleClass getVehicleClass(double mass) {
+        if (!Double.isFinite(mass) || mass <= 0.0D) {
+            return VehicleClass.MEDIUM;
+        }
 
-    /** Only actual turf. Mycelium / podzol are deliberately left alone. */
+        if (mass < TireTracksConfig.lightVehicleMaxMass()) {
+            return VehicleClass.LIGHT;
+        }
+
+        if (mass < TireTracksConfig.mediumVehicleMaxMass()) {
+            return VehicleClass.MEDIUM;
+        }
+
+        return VehicleClass.HEAVY;
+    }
+
     private static boolean isTurf(BlockState state) {
         return state.is(Blocks.GRASS_BLOCK);
     }
 
-    private static void churnTurf(ServerLevel level, BlockPos pos, BlockState state) {
-        RandomSource rand = level.getRandom();
-        if (rand.nextDouble() >= TireTracksConfig.turfChance()) return;
+    private static void churnTurf(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState originalState,
+            VehicleClass vehicleClass
+    ) {
+        RandomSource random = level.getRandom();
 
-        Block result = CHURNED[rand.nextInt(CHURNED.length)];
-        level.setBlock(pos, result.defaultBlockState(), Block.UPDATE_ALL);
-        clearVegetation(level, pos.above());
-        effects(level, pos, state);
+        double chance = getChance(vehicleClass);
+
+        if (random.nextDouble() >= chance) {
+            return;
+        }
+
+        Block[] possibleBlocks =
+                getPossibleTrackBlocks(vehicleClass);
+
+        Block result =
+                possibleBlocks[random.nextInt(possibleBlocks.length)];
+
+        level.setBlock(
+                pos,
+                result.defaultBlockState(),
+                Block.UPDATE_ALL
+        );
+
+        clearVegetation(
+                level,
+                pos.above()
+        );
+
+        playEffects(
+                level,
+                pos,
+                originalState
+        );
     }
 
-    /** Grass / flowers sitting on the turf get shredded with it. */
-    private static void clearVegetation(ServerLevel level, BlockPos above) {
-        BlockState s = level.getBlockState(above);
-        if (s.isAir()) return;
-        if (s.canBeReplaced() && s.getFluidState().getType() == Fluids.EMPTY) {
-            level.destroyBlock(above, false);
+    private static double getChance(VehicleClass vehicleClass) {
+        return switch (vehicleClass) {
+            case LIGHT -> TireTracksConfig.lightChance();
+            case MEDIUM -> TireTracksConfig.mediumChance();
+            case HEAVY -> TireTracksConfig.heavyChance();
+        };
+    }
+
+    private static Block[] getPossibleTrackBlocks(
+            VehicleClass vehicleClass
+    ) {
+        return switch (vehicleClass) {
+            case LIGHT -> new Block[]{
+                    Blocks.DIRT,
+                    Blocks.SAND
+            };
+
+            case MEDIUM -> new Block[]{
+                    Blocks.GRAVEL,
+                    Blocks.SAND,
+                    Blocks.DIRT_PATH
+            };
+
+            case HEAVY -> new Block[]{
+                    Blocks.MUD,
+                    Blocks.COARSE_DIRT,
+                    Blocks.DIRT
+            };
+        };
+    }
+
+    private static void clearVegetation(
+            ServerLevel level,
+            BlockPos pos
+    ) {
+        BlockState state =
+                level.getBlockState(pos);
+
+        if (state.isAir()) {
+            return;
+        }
+
+        if (state.canBeReplaced()
+                && state.getFluidState().getType() == Fluids.EMPTY) {
+            level.destroyBlock(pos, false);
         }
     }
-
-    // ------------------------------------------------------------------ snow
 
     private static boolean isSnow(BlockState state) {
-        return state.is(Blocks.SNOW) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW);
+        return state.is(Blocks.SNOW)
+                || state.is(Blocks.SNOW_BLOCK)
+                || state.is(Blocks.POWDER_SNOW);
     }
 
-    /**
-     * Driving over snow shaves off one layer per pass. When the last layer goes, the ground
-     * underneath may be churned into mud.
-     */
-    private static void crushSnow(ServerLevel level, BlockPos pos, BlockState state) {
-        if (!TireTracksConfig.eatSnow()) return;
-        RandomSource rand = level.getRandom();
-
-        // Full snow / powder snow blocks collapse into a tall layer stack first.
-        if (state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW)) {
-            level.setBlock(pos, Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, 7), Block.UPDATE_ALL);
-            effects(level, pos, state);
+    private static void crushSnow(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state
+    ) {
+        if (!TireTracksConfig.eatSnow()) {
             return;
         }
 
-        int layers = state.getValue(SnowLayerBlock.LAYERS);
+        RandomSource random =
+                level.getRandom();
+
+        /*
+         * Full snow and powder snow blocks become
+         * a seven-layer snow block first.
+         */
+        if (state.is(Blocks.SNOW_BLOCK)
+                || state.is(Blocks.POWDER_SNOW)) {
+            level.setBlock(
+                    pos,
+                    Blocks.SNOW.defaultBlockState()
+                            .setValue(
+                                    SnowLayerBlock.LAYERS,
+                                    7
+                            ),
+                    Block.UPDATE_ALL
+            );
+
+            playEffects(
+                    level,
+                    pos,
+                    state
+            );
+
+            return;
+        }
+
+        int layers =
+                state.getValue(
+                        SnowLayerBlock.LAYERS
+                );
+
         if (layers > 1) {
-            level.setBlock(pos, state.setValue(SnowLayerBlock.LAYERS, layers - 1), Block.UPDATE_ALL);
-            effects(level, pos, state);
+            level.setBlock(
+                    pos,
+                    state.setValue(
+                            SnowLayerBlock.LAYERS,
+                            layers - 1
+                    ),
+                    Block.UPDATE_ALL
+            );
+
+            playEffects(
+                    level,
+                    pos,
+                    state
+            );
+
             return;
         }
 
-        // Last layer: remove it, and sometimes leave churned mud behind.
+        /*
+         * Last snow layer disappears.
+         */
         level.removeBlock(pos, false);
-        effects(level, pos, state);
 
-        if (rand.nextDouble() < TireTracksConfig.snowToMudChance()) {
-            BlockPos below = pos.below();
-            if (isMuddyable(level.getBlockState(below))) {
-                level.setBlock(below, Blocks.MUD.defaultBlockState(), Block.UPDATE_ALL);
-            }
+        playEffects(
+                level,
+                pos,
+                state
+        );
+
+        if (random.nextDouble()
+                >= TireTracksConfig.snowToMudChance()) {
+            return;
+        }
+
+        BlockPos belowPos =
+                pos.below();
+
+        BlockState belowState =
+                level.getBlockState(belowPos);
+
+        if (isMuddyable(belowState)) {
+            level.setBlock(
+                    belowPos,
+                    Blocks.MUD.defaultBlockState(),
+                    Block.UPDATE_ALL
+            );
         }
     }
 
-    /** Ground that can be trampled into mud once the snow is gone. */
     private static boolean isMuddyable(BlockState state) {
         return state.is(Blocks.GRASS_BLOCK)
                 || state.is(Blocks.DIRT)
@@ -136,17 +287,39 @@ public final class TerrainDeformer {
                 || state.is(Blocks.CLAY);
     }
 
-    // --------------------------------------------------------------- effects
-
-    private static void effects(ServerLevel level, BlockPos pos, BlockState broken) {
+    private static void playEffects(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState brokenState
+    ) {
         if (TireTracksConfig.spawnParticles()) {
-            level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, broken),
-                    pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D,
-                    6, 0.25D, 0.05D, 0.25D, 0.02D);
+            level.sendParticles(
+                    new BlockParticleOption(
+                            ParticleTypes.BLOCK,
+                            brokenState
+                    ),
+                    pos.getX() + 0.5D,
+                    pos.getY() + 1.0D,
+                    pos.getZ() + 0.5D,
+                    6,
+                    0.25D,
+                    0.05D,
+                    0.25D,
+                    0.02D
+            );
         }
+
         if (TireTracksConfig.playSounds()) {
-            level.playSound(null, pos, broken.getSoundType().getBreakSound(), SoundSource.BLOCKS, 0.35F,
-                    0.8F + level.getRandom().nextFloat() * 0.3F);
+            level.playSound(
+                    null,
+                    pos,
+                    brokenState.getSoundType().getBreakSound(),
+                    SoundSource.BLOCKS,
+                    0.35F,
+                    0.8F
+                            + level.getRandom().nextFloat()
+                            * 0.3F
+            );
         }
     }
 }
