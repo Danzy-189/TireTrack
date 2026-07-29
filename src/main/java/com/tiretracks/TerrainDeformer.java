@@ -1,10 +1,12 @@
 package com.tiretracks;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -13,7 +15,31 @@ import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 
+/**
+ * Turns repeated wheel contact into a road.
+ *
+ * <p>Ground wears down one stage at a time and the current stage is stored in
+ * the world itself, as the block that is standing there:</p>
+ *
+ * <pre>
+ * turf -> dirt path -> coarse dirt -> loose fill -> puddle
+ * </pre>
+ *
+ * <p>The loose fill depends on the weather: mud when wet, sand in hot dry
+ * biomes, gravel otherwise. Only a wet, fully worn rut can become a puddle, and
+ * in a freezing biome that puddle is ice.</p>
+ *
+ * <p>Because the stage is the block, progress survives restarts and chunk
+ * unloads without a single byte of extra save data.</p>
+ */
 public final class TerrainDeformer {
+
+    public static final int STAGE_NONE = -1;
+    public static final int STAGE_TURF = 0;
+    public static final int STAGE_PATH = 1;
+    public static final int STAGE_COARSE = 2;
+    public static final int STAGE_LOOSE = 3;
+    public static final int STAGE_PUDDLE = 4;
 
     private TerrainDeformer() {
     }
@@ -42,34 +68,26 @@ public final class TerrainDeformer {
             return;
         }
 
-        VehicleClass vehicleClass =
-                getVehicleClass(vehicleMass);
+        VehicleClass vehicleClass = getVehicleClass(vehicleMass);
 
         /*
-         * A single snow layer has no collision. The wheel raycast therefore
-         * usually hits the block below it, so check the block above first.
+         * Thin snow has no collision, so the wheel raycast usually reports the
+         * block below it. Check above first.
          */
         BlockPos abovePos = pos.above();
         BlockState aboveState = server.getBlockState(abovePos);
 
-        if (isSnow(aboveState)) {
-            crushSnow(server, abovePos, aboveState);
+        if (Surfaces.isThinSnow(aboveState)) {
+            packSnow(server, abovePos, aboveState);
             return;
         }
 
-        if (isSnow(state)) {
-            crushSnow(server, pos, state);
+        if (Surfaces.isSnow(state)) {
+            packSnow(server, pos, state);
             return;
         }
 
-        if (isTurf(state)) {
-            churnTurf(
-                    server,
-                    pos,
-                    state,
-                    vehicleClass
-            );
-        }
+        churn(server, pos, state, vehicleClass);
     }
 
     /*
@@ -93,46 +111,95 @@ public final class TerrainDeformer {
         return VehicleClass.HEAVY;
     }
 
-    private static boolean isTurf(BlockState state) {
-        return state.is(Blocks.GRASS_BLOCK);
+    /**
+     * Which stage of wear the ground is currently at.
+     */
+    public static int stageOf(BlockState state) {
+        if (state.is(Blocks.WATER) || state.is(Blocks.ICE)) {
+            return STAGE_PUDDLE;
+        }
+
+        if (state.is(Blocks.DIRT_PATH)) {
+            return STAGE_PATH;
+        }
+
+        if (state.is(Blocks.COARSE_DIRT)) {
+            return STAGE_COARSE;
+        }
+
+        if (state.is(Blocks.MUD)
+                || state.is(Blocks.GRAVEL)
+                || state.is(Blocks.CLAY)
+                || state.is(BlockTags.SAND)) {
+            return STAGE_LOOSE;
+        }
+
+        if (Surfaces.isTurf(state)) {
+            return STAGE_TURF;
+        }
+
+        return STAGE_NONE;
     }
 
-    private static void churnTurf(
+    /**
+     * Deepest stage a vehicle class is able to reach. A quad bike polishes a
+     * footpath, a loaded truck digs it out into a mud hole.
+     */
+    public static int maxStageFor(VehicleClass vehicleClass) {
+        return switch (vehicleClass) {
+            case LIGHT -> TireTracksConfig.lightMaxStage();
+            case MEDIUM -> TireTracksConfig.mediumMaxStage();
+            case HEAVY -> TireTracksConfig.heavyMaxStage();
+        };
+    }
+
+    private static void churn(
             ServerLevel level,
             BlockPos pos,
-            BlockState originalState,
+            BlockState state,
             VehicleClass vehicleClass
     ) {
-        RandomSource random = level.getRandom();
+        if (Surfaces.isImmune(state)) {
+            return;
+        }
 
-        double chance = getChance(vehicleClass);
+        int stage = stageOf(state);
+
+        if (stage == STAGE_NONE) {
+            return;
+        }
+
+        if (stage >= maxStageFor(vehicleClass)) {
+            return;
+        }
+
+        Weather.Moisture moisture = Weather.moistureAt(level, pos);
+
+        double chance = getChance(vehicleClass) * moisture.chanceMultiplier();
+
+        RandomSource random = level.getRandom();
 
         if (random.nextDouble() >= chance) {
             return;
         }
 
-        Block[] possibleBlocks =
-                getPossibleTrackBlocks(vehicleClass);
-
-        Block result =
-                possibleBlocks[random.nextInt(possibleBlocks.length)];
-
-        level.setBlock(
-                pos,
-                result.defaultBlockState(),
-                Block.UPDATE_ALL
-        );
-
-        clearVegetation(
-                level,
-                pos.above()
-        );
-
-        playEffects(
+        BlockState result = resultFor(
                 level,
                 pos,
-                originalState
+                state,
+                stage + 1,
+                moisture
         );
+
+        if (result == null) {
+            return;
+        }
+
+        level.setBlock(pos, result, Block.UPDATE_ALL);
+
+        clearVegetation(level, pos.above());
+
+        playEffects(level, pos, state);
     }
 
     private static double getChance(VehicleClass vehicleClass) {
@@ -143,35 +210,105 @@ public final class TerrainDeformer {
         };
     }
 
-    private static Block[] getPossibleTrackBlocks(
-            VehicleClass vehicleClass
+    /**
+     * @return the block for the next stage, or null when this step is not
+     *         possible right now.
+     */
+    private static BlockState resultFor(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState current,
+            int targetStage,
+            Weather.Moisture moisture
     ) {
-        return switch (vehicleClass) {
-            case LIGHT -> new Block[]{
-                    Blocks.DIRT,
-                    Blocks.SAND
-            };
+        switch (targetStage) {
+            case STAGE_PATH:
+                return Blocks.DIRT_PATH.defaultBlockState();
 
-            case MEDIUM -> new Block[]{
-                    Blocks.GRAVEL,
-                    Blocks.SAND,
-                    Blocks.DIRT_PATH
-            };
+            case STAGE_COARSE:
+                return Blocks.COARSE_DIRT.defaultBlockState();
 
-            case HEAVY -> new Block[]{
-                    Blocks.MUD,
-                    Blocks.COARSE_DIRT,
-                    Blocks.DIRT
-            };
-        };
+            case STAGE_LOOSE: {
+                Block loose = switch (moisture) {
+                    case WET -> Blocks.MUD;
+                    case DRY -> Blocks.SAND;
+                    case NEUTRAL -> Blocks.GRAVEL;
+                };
+
+                /*
+                 * Sand and gravel fall. Placing them over a gap would punch a
+                 * hole through the terrain instead of leaving a rut.
+                 */
+                if ((loose == Blocks.SAND || loose == Blocks.GRAVEL)
+                        && !hasSolidFloor(level, pos)) {
+                    return null;
+                }
+
+                return loose.defaultBlockState();
+            }
+
+            case STAGE_PUDDLE: {
+                if (!TireTracksConfig.puddles()) {
+                    return null;
+                }
+
+                if (!current.is(Blocks.MUD)) {
+                    return null;
+                }
+
+                if (moisture != Weather.Moisture.WET) {
+                    return null;
+                }
+
+                if (!canHoldPuddle(level, pos)) {
+                    return null;
+                }
+
+                return Weather.freezes(level, pos)
+                        ? Blocks.ICE.defaultBlockState()
+                        : Blocks.WATER.defaultBlockState();
+            }
+
+            default:
+                return null;
+        }
     }
 
-    private static void clearVegetation(
-            ServerLevel level,
-            BlockPos pos
-    ) {
-        BlockState state =
-                level.getBlockState(pos);
+    private static boolean hasSolidFloor(ServerLevel level, BlockPos pos) {
+        BlockPos belowPos = pos.below();
+
+        return level.getBlockState(belowPos)
+                .isFaceSturdy(level, belowPos, Direction.UP);
+    }
+
+    /**
+     * A puddle is only allowed in a rut that is walled in on all four sides and
+     * has a solid floor, so water can never run off across the landscape.
+     */
+    private static boolean canHoldPuddle(ServerLevel level, BlockPos pos) {
+        if (!hasSolidFloor(level, pos)) {
+            return false;
+        }
+
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos neighbourPos = pos.relative(direction);
+
+            BlockState neighbourState = level.getBlockState(neighbourPos);
+
+            if (!neighbourState.isFaceSturdy(
+                    level,
+                    neighbourPos,
+                    direction.getOpposite()
+            )) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void clearVegetation(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
 
         if (state.isAir()) {
             return;
@@ -183,13 +320,13 @@ public final class TerrainDeformer {
         }
     }
 
-    private static boolean isSnow(BlockState state) {
-        return state.is(Blocks.SNOW)
-                || state.is(Blocks.SNOW_BLOCK)
-                || state.is(Blocks.POWDER_SNOW);
-    }
-
-    private static void crushSnow(
+    /**
+     * Snow is compressed rather than deleted: layers are shaved off, and the
+     * last one is driven into the ground as packed snow, which further passes
+     * polish into ice. Both only happen in biomes cold enough to keep them, so
+     * no melting holes appear in a temperate lawn.
+     */
+    private static void packSnow(
             ServerLevel level,
             BlockPos pos,
             BlockState state
@@ -198,98 +335,113 @@ public final class TerrainDeformer {
             return;
         }
 
-        RandomSource random =
-                level.getRandom();
+        if (Surfaces.isImmune(state)) {
+            return;
+        }
+
+        RandomSource random = level.getRandom();
 
         /*
-         * Full snow and powder snow blocks become
-         * a seven-layer snow block first.
+         * Packed snow is the last cosmetic stage before an ice road.
+         */
+        if (state.is(Blocks.PACKED_SNOW)) {
+            if (!TireTracksConfig.packSnow()
+                    || !Weather.freezes(level, pos)) {
+                return;
+            }
+
+            if (random.nextDouble()
+                    >= TireTracksConfig.snowToIceChance()) {
+                return;
+            }
+
+            level.setBlock(
+                    pos,
+                    Blocks.ICE.defaultBlockState(),
+                    Block.UPDATE_ALL
+            );
+
+            playEffects(level, pos, state);
+
+            return;
+        }
+
+        /*
+         * Full snow and powder snow blocks collapse into a seven layer stack
+         * first.
          */
         if (state.is(Blocks.SNOW_BLOCK)
                 || state.is(Blocks.POWDER_SNOW)) {
             level.setBlock(
                     pos,
                     Blocks.SNOW.defaultBlockState()
-                            .setValue(
-                                    SnowLayerBlock.LAYERS,
-                                    7
-                            ),
+                            .setValue(SnowLayerBlock.LAYERS, 7),
                     Block.UPDATE_ALL
             );
 
-            playEffects(
-                    level,
-                    pos,
-                    state
-            );
+            playEffects(level, pos, state);
 
             return;
         }
 
-        int layers =
-                state.getValue(
-                        SnowLayerBlock.LAYERS
-                );
+        if (!state.hasProperty(SnowLayerBlock.LAYERS)) {
+            return;
+        }
+
+        int layers = state.getValue(SnowLayerBlock.LAYERS);
 
         if (layers > 1) {
             level.setBlock(
                     pos,
-                    state.setValue(
-                            SnowLayerBlock.LAYERS,
-                            layers - 1
-                    ),
+                    state.setValue(SnowLayerBlock.LAYERS, layers - 1),
                     Block.UPDATE_ALL
             );
 
-            playEffects(
-                    level,
-                    pos,
-                    state
-            );
+            playEffects(level, pos, state);
 
             return;
         }
 
-        /*
-         * Last snow layer disappears.
-         */
         level.removeBlock(pos, false);
 
-        playEffects(
-                level,
-                pos,
-                state
-        );
+        playEffects(level, pos, state);
+
+        BlockPos belowPos = pos.below();
+        BlockState belowState = level.getBlockState(belowPos);
+
+        if (Surfaces.isImmune(belowState)) {
+            return;
+        }
+
+        /*
+         * Driven into the ground, the last layer becomes packed snow flush with
+         * the surface: a groomed track without a bump for the suspension.
+         */
+        if (TireTracksConfig.packSnow()
+                && Weather.freezes(level, pos)
+                && Surfaces.isPackableGround(belowState)
+                && belowState.isFaceSturdy(level, belowPos, Direction.UP)) {
+            level.setBlock(
+                    belowPos,
+                    Blocks.PACKED_SNOW.defaultBlockState(),
+                    Block.UPDATE_ALL
+            );
+
+            return;
+        }
 
         if (random.nextDouble()
                 >= TireTracksConfig.snowToMudChance()) {
             return;
         }
 
-        BlockPos belowPos =
-                pos.below();
-
-        BlockState belowState =
-                level.getBlockState(belowPos);
-
-        if (isMuddyable(belowState)) {
+        if (Surfaces.isMuddyable(belowState)) {
             level.setBlock(
                     belowPos,
                     Blocks.MUD.defaultBlockState(),
                     Block.UPDATE_ALL
             );
         }
-    }
-
-    private static boolean isMuddyable(BlockState state) {
-        return state.is(Blocks.GRASS_BLOCK)
-                || state.is(Blocks.DIRT)
-                || state.is(Blocks.COARSE_DIRT)
-                || state.is(Blocks.ROOTED_DIRT)
-                || state.is(Blocks.PODZOL)
-                || state.is(Blocks.DIRT_PATH)
-                || state.is(Blocks.SNOW_BLOCK)
-                || state.is(Blocks.CLAY);
     }
 
     private static void playEffects(
@@ -321,9 +473,7 @@ public final class TerrainDeformer {
                     brokenState.getSoundType().getBreakSound(),
                     SoundSource.BLOCKS,
                     0.35F,
-                    0.8F
-                            + level.getRandom().nextFloat()
-                            * 0.3F
+                    0.8F + level.getRandom().nextFloat() * 0.3F
             );
         }
     }
