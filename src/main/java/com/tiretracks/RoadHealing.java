@@ -17,8 +17,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Handles road healing: puddles evaporate in dry weather, mud heals back to
- * turf during rain if untouched for long enough.
+ * Handles road healing: mud heals back to turf during rain if untouched for
+ * long enough.
  *
  * <p>Touch time tracking is in-memory only and clears when a chunk unloads, so
  * healing timers reset on chunk reload. This is acceptable: the mechanic is
@@ -158,78 +158,12 @@ public final class RoadHealing {
                 continue;
             }
 
-            tryHeal(level, pos, state, random);
+            if (state.is(Blocks.MUD)
+                    || state.is(Blocks.COARSE_DIRT)
+                    || state.is(Blocks.DIRT_PATH)) {
+                tryHealMud(level, pos, state, random);
+            }
         }
-    }
-
-    private static void tryHeal(
-            ServerLevel level,
-            BlockPos pos,
-            BlockState state,
-            RandomSource random
-    ) {
-        if (state.is(Blocks.WATER) || state.is(Blocks.ICE)) {
-            tryEvaporatePuddle(level, pos, state, random);
-
-            return;
-        }
-
-        if (state.is(Blocks.MUD)
-                || state.is(Blocks.COARSE_DIRT)
-                || state.is(Blocks.DIRT_PATH)) {
-            tryHealMud(level, pos, state, random);
-        }
-    }
-
-    /**
-     * Puddles evaporate back into mud in dry weather.
-     */
-    private static void tryEvaporatePuddle(
-            ServerLevel level,
-            BlockPos pos,
-            BlockState state,
-            RandomSource random
-    ) {
-        if (!TireTracksConfig.puddlesEvaporate()) {
-            return;
-        }
-
-        /*
-         * Puddles only evaporate when it is not raining on them.
-         */
-        if (level.isRainingAt(pos.above())) {
-            touch(level, pos);
-
-            return;
-        }
-
-        long sinceTouch = ticksSinceTouch(level, pos);
-
-        double evaporationDays = TireTracksConfig.puddleEvaporationDays();
-
-        /*
-         * Hot biomes evaporate faster.
-         */
-        float biomeTemperature = level.getBiome(pos)
-                .value()
-                .getBaseTemperature();
-
-        if (biomeTemperature >= TireTracksConfig.dryBiomeTemperature()) {
-            evaporationDays /= TireTracksConfig.hotBiomeEvaporationMultiplier();
-        }
-
-        long evaporationTicks = (long) (evaporationDays * TICKS_PER_DAY);
-
-        if (sinceTouch < evaporationTicks) {
-            return;
-        }
-
-        /*
-         * Evaporate: puddle becomes mud.
-         */
-        level.setBlock(pos, Blocks.MUD.defaultBlockState(), Block.UPDATE_ALL);
-
-        forget(pos);
     }
 
     /**

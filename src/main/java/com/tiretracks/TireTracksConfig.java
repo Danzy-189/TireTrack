@@ -54,9 +54,6 @@ public final class TireTracksConfig {
         public final ModConfigSpec.BooleanValue carryEnabled;
         public final ModConfigSpec.IntValue carryDistance;
 
-        public final ModConfigSpec.BooleanValue puddlesEvaporate;
-        public final ModConfigSpec.DoubleValue puddleEvaporationDays;
-        public final ModConfigSpec.DoubleValue hotBiomeEvaporationMultiplier;
         public final ModConfigSpec.BooleanValue mudHeals;
         public final ModConfigSpec.DoubleValue mudHealChance;
         public final ModConfigSpec.DoubleValue mudHealDays;
@@ -331,37 +328,10 @@ public final class TireTracksConfig {
 
             builder.comment(
                     "Road healing: abandoned roads slowly return to nature.",
-                    "Puddles evaporate in dry weather, mud heals back to turf during rain.",
+                    "Mud heals back to grass during rain if untouched long enough.",
                     "Actively used roads stay as they are; only neglected stretches heal.",
                     "Time is measured in Minecraft days (1 day = 24000 ticks = 20 minutes real time)."
             ).push("healing");
-
-            puddlesEvaporate = builder.comment(
-                    "Whether puddles (water and ice in ruts) evaporate in dry weather, turning back into mud."
-            ).define(
-                    "puddlesEvaporate",
-                    true
-            );
-
-            puddleEvaporationDays = builder.comment(
-                    "Minecraft days without rain before a puddle evaporates. Raining on the block resets the timer.",
-                    "1 Minecraft day = 24000 ticks = 20 minutes real time.",
-                    "Hot biomes (base temperature >= dryBiomeTemperature) evaporate faster, see hotBiomeEvaporationMultiplier."
-            ).defineInRange(
-                    "puddleEvaporationDays",
-                    1.0D,
-                    0.01D,
-                    30.0D
-            );
-
-            hotBiomeEvaporationMultiplier = builder.comment(
-                    "How much faster puddles evaporate in hot biomes. 2.0 means twice as fast (half the days)."
-            ).defineInRange(
-                    "hotBiomeEvaporationMultiplier",
-                    2.0D,
-                    1.0D,
-                    10.0D
-            );
 
             mudHeals = builder.comment(
                     "Whether mud, coarse dirt and dirt paths slowly heal back to grass during rain,",
@@ -490,18 +460,6 @@ public final class TireTracksConfig {
 
     public static int carryDistance() {
         return COMMON.carryDistance.get();
-    }
-
-    public static boolean puddlesEvaporate() {
-        return COMMON.puddlesEvaporate.get();
-    }
-
-    public static double puddleEvaporationDays() {
-        return COMMON.puddleEvaporationDays.get();
-    }
-
-    public static double hotBiomeEvaporationMultiplier() {
-        return COMMON.hotBiomeEvaporationMultiplier.get();
     }
 
     public static boolean mudHeals() {
