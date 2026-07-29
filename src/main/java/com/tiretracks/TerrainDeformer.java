@@ -22,6 +22,8 @@ import net.minecraft.world.level.material.Fluids;
  *
  * <pre>
  * turf -> dirt path -> coarse dirt -> loose fill -> puddle
+ * sand -> sandstone (medium) or gone (heavy)
+ * stone -> cobblestone or andesite (medium+)
  * </pre>
  *
  * <p>The loose fill depends on the weather: mud when wet, sand in hot dry
@@ -162,6 +164,95 @@ public final class TerrainDeformer {
             return;
         }
 
+        RandomSource random = level.getRandom();
+
+        /*
+         * Sand: light vehicles leave no trace, medium compact it into sandstone,
+         * heavy sink it entirely, leaving a depression. Red sand behaves the
+         * same, turning into red sandstone.
+         */
+        if (state.is(Blocks.SAND) || state.is(Blocks.RED_SAND)) {
+            double chance = getChance(vehicleClass);
+
+            if (random.nextDouble() >= chance) {
+                return;
+            }
+
+            if (vehicleClass == VehicleClass.LIGHT) {
+                return;
+            }
+
+            if (vehicleClass == VehicleClass.MEDIUM) {
+                Block sandstone = state.is(Blocks.RED_SAND)
+                        ? Blocks.RED_SANDSTONE
+                        : Blocks.SANDSTONE;
+
+                level.setBlock(
+                        pos,
+                        sandstone.defaultBlockState(),
+                        Block.UPDATE_ALL
+                );
+
+                clearVegetation(level, pos.above());
+                spawnBreakParticles(level, pos, state);
+
+                return;
+            }
+
+            /*
+             * Heavy vehicles punch the sand down, leaving a hole. Only if there
+             * is solid ground below, otherwise it would cascade through the
+             * terrain.
+             */
+            if (vehicleClass == VehicleClass.HEAVY) {
+                if (!hasSolidFloor(level, pos)) {
+                    return;
+                }
+
+                level.removeBlock(pos, false);
+
+                clearVegetation(level, pos.above());
+                spawnBreakParticles(level, pos, state);
+
+                return;
+            }
+        }
+
+        /*
+         * Stone: light vehicles leave it untouched, medium and heavy crack it
+         * into cobblestone or andesite, chosen at random so the track blends
+         * into the landscape.
+         */
+        if (state.is(Blocks.STONE)) {
+            if (vehicleClass == VehicleClass.LIGHT) {
+                return;
+            }
+
+            double chance = getChance(vehicleClass);
+
+            if (random.nextDouble() >= chance) {
+                return;
+            }
+
+            Block cracked = random.nextBoolean()
+                    ? Blocks.COBBLESTONE
+                    : Blocks.ANDESITE;
+
+            level.setBlock(
+                    pos,
+                    cracked.defaultBlockState(),
+                    Block.UPDATE_ALL
+            );
+
+            clearVegetation(level, pos.above());
+            spawnBreakParticles(level, pos, state);
+
+            return;
+        }
+
+        /*
+         * Everything below here is the soil rut chain.
+         */
         int stage = stageOf(state);
 
         if (stage == STAGE_NONE) {
@@ -175,8 +266,6 @@ public final class TerrainDeformer {
         Weather.Moisture moisture = Weather.moistureAt(level, pos);
 
         double chance = getChance(vehicleClass) * moisture.chanceMultiplier();
-
-        RandomSource random = level.getRandom();
 
         if (random.nextDouble() >= chance) {
             return;

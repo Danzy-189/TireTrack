@@ -47,6 +47,24 @@ class at coarse dirt would mean almost nothing in the game ever digs a real rut.
 Sand and gravel are gravity blocks, so they are only placed when the block below is solid. Otherwise the rut
 would punch a hole through the terrain instead of staying a rut.
 
+## Sand and stone
+
+### Sand (sand, red sand)
+
+- **Light vehicles** leave no trace.
+- **Medium vehicles** pack the sand down into sandstone or red sandstone, which looks like a beaten path but does
+  not stand out too much against the desert.
+- **Heavy vehicles** sink the sand entirely, leaving a depression in the terrain.
+
+A heavy vehicle can only sink sand when there is solid ground below, otherwise it would cascade down through the
+terrain.
+
+### Stone
+
+- **Light vehicles** leave no trace.
+- **Medium and heavy vehicles** crack stone into cobblestone or andesite, chosen at random. The mix keeps the
+  track from looking artificial.
+
 ## Wet and dry ground
 
 Moisture decides both how fast the ground gives way and what it turns into at stage 3.
@@ -199,6 +217,8 @@ removed keys just sit there unused.
    the polishing step while keeping the rest.
 6. **Few particles at very low speed.** Expected: spray needs the wheel to enter a new block, and density scales
    with speed. Lower `sprayFullSpeed` if you want thick spray while crawling.
+7. **Sand should not sink / stone should not crack.** Add `minecraft:sand`, `minecraft:red_sand`, or `minecraft:stone`
+   to `#tiretracks:immune`.
 
 ## Building
 
