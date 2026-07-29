@@ -2,12 +2,13 @@
 
 TireTracks makes Create Aeronautics vehicles (Offroad / Sable / Simulated) leave real marks on the world.
 Ground does not just change once and stay that way: it wears down stage by stage into a rut, snow is packed
-into an ice road instead of vanishing, wheels throw up surface appropriate spray, mud gets dragged onto clean
-ground, and a fast run across dry ground raises a blinding dust cloud behind you.
+into an ice road instead of vanishing, wheels throw up surface appropriate spray, and mud gets dragged onto
+clean ground for a few blocks.
 
 - Minecraft 1.21.1, NeoForge 21.1.235, Java 21
 - Version 3.1.0
 - Server side logic only. No client mod required, no packets, no new blocks or items.
+- Silent, and no status effect is ever applied to a player: this mod only places blocks and spawns particles.
 
 ## Requirements
 
@@ -27,18 +28,21 @@ block standing there, so progress survives restarts and chunk unloads without an
 | 3 | mud, sand or gravel | depends on the weather, see below |
 | 4 | water, or ice in a freezing biome | a puddle in a soaked rut |
 
-How deep a vehicle can dig depends on its mass class. A light quad polishes a footpath and stops there, a
-loaded truck can carve the same spot all the way down to a mud hole.
+How fast the ground gives way, and how deep it can go, depends on the vehicle's mass class.
 
 | Class | Mass | Chance per check | Deepest stage |
 | --- | --- | --- | --- |
-| Light | 0-45 kg | 0.12 | 1, dirt path |
-| Medium | 46-80 kg | 0.30 | 2, coarse dirt |
+| Light | 0-45 kg | 0.12 | 2, coarse dirt |
+| Medium | 46-80 kg | 0.30 | 3, loose fill |
 | Heavy | above 80 kg | 0.50 | 4, puddle |
 
-Mass is read from Sable in kilograms, on the same scale Create Aeronautics reports. Both bounds are inclusive:
-exactly 45 kg is light, exactly 80 kg is medium. If this Sable build does not expose a readable total mass,
-every vehicle falls back to the medium profile.
+Mass is read straight off the Sable sub level, in kilograms: it is the same number the in game sub level debug
+dump prints as `Mass:`. Both bounds are inclusive, so exactly 45 kg is light and exactly 80 kg is medium. If
+this Sable build does not expose a readable value, every vehicle falls back to the medium profile.
+
+The stage caps are tuned for vehicles that actually get built, which usually weigh 40-80 kg. Capping the medium
+class at coarse dirt would mean almost nothing in the game ever digs a real rut. Raise or lower them freely with
+`lightMaxStage`, `mediumMaxStage` and `heavyMaxStage`.
 
 Sand and gravel are gravity blocks, so they are only placed when the block below is solid. Otherwise the rut
 would punch a hole through the terrain instead of staying a rut.
@@ -106,17 +110,6 @@ falling dust for the next few blocks. Driving through water rinses it clean imme
 This is particles only. No blocks are placed on the surface you drive over, because smearing real mud onto
 somebody's stone road would be griefing rather than flavour.
 
-## Dust veil
-
-Driving fast over dusty ground raises a thick cloud that briefly blinds anything caught inside it, which turns a
-chase into a question of distance and racing line: hang directly behind the leader and you drive blind.
-
-Nothing in the physics API says who is riding which vehicle, so own crew protection is a distance heuristic:
-entities closer than `dustVeilSelfRadius` to the wheel are treated as being on board and are spared, while
-anything further out inside `dustVeilRadius` counts as a follower. Raise the inner radius on very large builds.
-Blindness is only refreshed once the previous puff has mostly worn off, so a long dusty straight cannot stack
-into permanent blindness. Set `dustVeil = false` to keep the particles and drop the effect.
-
 ## Block tags
 
 No surface list is hardcoded. Everything lives in `data/tiretracks/tags/block/` and can be extended or replaced
@@ -127,7 +120,7 @@ by any datapack or modpack.
 | `#tiretracks:immune` | never touched by this mod. Empty by default, free blacklist |
 | `#tiretracks:turf` | entry point of the rut chain |
 | `#tiretracks:soft` | loose soil, throws up clods |
-| `#tiretracks:dusty` | dry granular ground, raises dust and can raise a dust veil |
+| `#tiretracks:dusty` | dry granular ground, raises a dust plume |
 | `#tiretracks:wet` | wet ground: splashes instead of dust, sticks to tyres |
 | `#tiretracks:snow` | treated as a snow surface, including the ice a groomed track turns into |
 | `#tiretracks:muddyable` | ground the last snow layer may turn into mud |
@@ -149,15 +142,14 @@ Blocks with a block entity are always protected, so a chest or a machine is neve
 | `mediumChance` | 0.30 | same for medium |
 | `heavyChance` | 0.50 | same for heavy |
 | `tickInterval` | 4 | physics ticks between terrain checks per wheel |
-| `playSounds` | true | crunch when the ground gives way |
 | `spawnParticles` | true | master switch for every particle this mod spawns |
 
 ### `[ruts]`
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `lightMaxStage` | 1 | deepest stage a light vehicle can reach |
-| `mediumMaxStage` | 2 | deepest stage a medium vehicle can reach |
+| `lightMaxStage` | 2 | deepest stage a light vehicle can reach |
+| `mediumMaxStage` | 3 | deepest stage a medium vehicle can reach |
 | `heavyMaxStage` | 4 | deepest stage a heavy vehicle can reach |
 | `puddles` | true | allow worn wet ruts to fill with water or ice |
 | `wetChanceMultiplier` | 1.6 | chance multiplier in rain or next to water |
@@ -189,35 +181,24 @@ Blocks with a block entity are always protected, so a chest or a machine is neve
 | `carryEnabled` | true | drag mud onto clean ground |
 | `carryDistance` | 6 | blocks of clean ground that still show a trail |
 
-### `[dust]`
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `dustVeil` | true | whether the cloud blinds nearby entities |
-| `dustVeilMinSpeed` | 8.0 | minimum speed in blocks per second to raise a veil |
-| `dustVeilRadius` | 10.0 | outer radius of the cloud |
-| `dustVeilSelfRadius` | 4.0 | inner radius that is spared, meant to cover your own vehicle |
-| `dustVeilDurationTicks` | 30 | blindness duration, 20 ticks is one second |
-
-Upgrading from 3.0 moves `eatSnow` and `snowToMudChance` from `[general]` into `[snow]`. Delete the old config
-file to regenerate it cleanly, otherwise the old keys just sit there unused.
+Upgrading from 3.0 moves `eatSnow` and `snowToMudChance` from `[general]` into `[snow]`, and drops `playSounds`
+along with the whole `[dust]` section. Delete the old config file to regenerate it cleanly, otherwise the
+removed keys just sit there unused.
 
 ## Troubleshooting
 
-1. **Nothing happens at all.** The mixin is optional by design. Check the log for a line about the Sable mass
-   API; if the wheel mount class was renamed in a newer Offroad build, the redirect simply never applies.
+1. **Nothing happens at all.** The mixin is optional by design. Check the log for a line about the Sable sub
+   level API; if the wheel mount class was renamed in a newer Offroad build, the redirect simply never applies.
 2. **Every vehicle behaves as medium.** The mass lookup failed, which is the intended fallback. It is logged once
    at startup.
-3. **Everything is heavy.** This Sable build may report per wheel mass rather than total vehicle mass. Raise
-   `lightVehicleMaxMass` and `mediumVehicleMaxMass` to match what you actually see.
-4. **Too destructive.** Lower the chances, cap the stages with `lightMaxStage` and friends, or add blocks to
-   `#tiretracks:immune`.
+3. **The rut stops at a certain block.** That is the stage cap for that mass class. Compare the vehicle's mass
+   from the sub level debug dump against `lightVehicleMaxMass` / `mediumVehicleMaxMass`, then raise the matching
+   `*MaxStage`.
+4. **Too destructive.** Lower the chances, cap the stages, or add blocks to `#tiretracks:immune`.
 5. **I do not want ice roads.** Set `packSnow = false`, or remove `minecraft:ice` from `#tiretracks:snow` to stop
    the polishing step while keeping the rest.
 6. **Few particles at very low speed.** Expected: spray needs the wheel to enter a new block, and density scales
    with speed. Lower `sprayFullSpeed` if you want thick spray while crawling.
-7. **My own driver keeps getting blinded.** Raise `dustVeilSelfRadius`, or set `dustVeil = false` to keep the
-   cloud purely cosmetic.
 
 ## Building
 
