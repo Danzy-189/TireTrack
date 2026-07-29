@@ -9,45 +9,168 @@ public final class TireTracksConfig {
     public static final Common COMMON;
 
     static {
-        Pair<Common, ModConfigSpec> pair = new ModConfigSpec.Builder().configure(Common::new);
+        Pair<Common, ModConfigSpec> pair =
+                new ModConfigSpec.Builder().configure(Common::new);
+
         COMMON = pair.getLeft();
         SPEC = pair.getRight();
     }
 
-    public static class Common {
-        public final ModConfigSpec.DoubleValue turfChance;
+    private TireTracksConfig() {
+    }
+
+    public static final class Common {
+
+        public final ModConfigSpec.DoubleValue lightVehicleMaxMass;
+        public final ModConfigSpec.DoubleValue mediumVehicleMaxMass;
+
+        public final ModConfigSpec.DoubleValue lightChance;
+        public final ModConfigSpec.DoubleValue mediumChance;
+        public final ModConfigSpec.DoubleValue heavyChance;
+
         public final ModConfigSpec.DoubleValue snowToMudChance;
+
         public final ModConfigSpec.IntValue tickInterval;
+
         public final ModConfigSpec.BooleanValue eatSnow;
         public final ModConfigSpec.BooleanValue playSounds;
         public final ModConfigSpec.BooleanValue spawnParticles;
 
-        Common(ModConfigSpec.Builder b) {
-            b.comment("TireTracks - terrain deformation under Create Aeronautics / Offroad wheels").push("general");
+        private Common(ModConfigSpec.Builder builder) {
+            builder.comment(
+                    "TireTracks terrain deformation settings.",
+                    "Mass is measured in kilograms when Sable exposes total vehicle mass.",
+                    "If total mass cannot be read, the effective wheel mass is used as fallback."
+            ).push("general");
 
-            turfChance = b.comment("Chance (0..1) that a grass block under a wheel is churned into sand/dirt/mud/gravel/coarse dirt")
-                    .defineInRange("turfChance", 0.30D, 0.0D, 1.0D);
+            lightVehicleMaxMass = builder.comment(
+                    "Maximum mass of a light vehicle.",
+                    "Vehicles below this value use the light profile."
+            ).defineInRange(
+                    "lightVehicleMaxMass",
+                    500.0D,
+                    1.0D,
+                    100000.0D
+            );
 
-            snowToMudChance = b.comment("Chance (0..1) that the ground left behind by the last removed snow layer becomes mud")
-                    .defineInRange("snowToMudChance", 0.25D, 0.0D, 1.0D);
+            mediumVehicleMaxMass = builder.comment(
+                    "Maximum mass of a medium vehicle.",
+                    "Vehicles from lightVehicleMaxMass up to this value use the medium profile.",
+                    "Vehicles above this value use the heavy profile."
+            ).defineInRange(
+                    "mediumVehicleMaxMass",
+                    1500.0D,
+                    1.0D,
+                    100000.0D
+            );
 
-            eatSnow = b.comment("Wheels remove the snow layers they drive over")
-                    .define("eatSnow", true);
+            lightChance = builder.comment(
+                    "Chance for light vehicles to create a track.",
+                    "Light vehicles can create only dirt or sand."
+            ).defineInRange(
+                    "lightChance",
+                    0.12D,
+                    0.0D,
+                    1.0D
+            );
 
-            tickInterval = b.comment("Only deform once every N physics ticks per wheel (higher = cheaper, slower damage)")
-                    .defineInRange("tickInterval", 4, 1, 200);
+            mediumChance = builder.comment(
+                    "Chance for medium vehicles to create a track.",
+                    "Medium vehicles can create gravel, sand or dirt path."
+            ).defineInRange(
+                    "mediumChance",
+                    0.30D,
+                    0.0D,
+                    1.0D
+            );
 
-            playSounds = b.define("playSounds", true);
-            spawnParticles = b.define("spawnParticles", true);
+            heavyChance = builder.comment(
+                    "Chance for heavy vehicles to create a track.",
+                    "Heavy vehicles can create mud, coarse dirt or dirt."
+            ).defineInRange(
+                    "heavyChance",
+                    0.50D,
+                    0.0D,
+                    1.0D
+            );
 
-            b.pop();
+            snowToMudChance = builder.comment(
+                    "Chance that the last snow layer leaves mud underneath."
+            ).defineInRange(
+                    "snowToMudChance",
+                    0.25D,
+                    0.0D,
+                    1.0D
+            );
+
+            eatSnow = builder.comment(
+                    "Whether wheels remove snow layers."
+            ).define(
+                    "eatSnow",
+                    true
+            );
+
+            tickInterval = builder.comment(
+                    "Number of physics ticks between terrain checks per wheel.",
+                    "Lower values create tracks more often but cost more performance."
+            ).defineInRange(
+                    "tickInterval",
+                    4,
+                    1,
+                    200
+            );
+
+            playSounds = builder.define(
+                    "playSounds",
+                    true
+            );
+
+            spawnParticles = builder.define(
+                    "spawnParticles",
+                    true
+            );
+
+            builder.pop();
         }
     }
 
-    public static double turfChance() { return COMMON.turfChance.get(); }
-    public static double snowToMudChance() { return COMMON.snowToMudChance.get(); }
-    public static int tickInterval() { return COMMON.tickInterval.get(); }
-    public static boolean eatSnow() { return COMMON.eatSnow.get(); }
-    public static boolean playSounds() { return COMMON.playSounds.get(); }
-    public static boolean spawnParticles() { return COMMON.spawnParticles.get(); }
+    public static double lightVehicleMaxMass() {
+        return COMMON.lightVehicleMaxMass.get();
+    }
+
+    public static double mediumVehicleMaxMass() {
+        return COMMON.mediumVehicleMaxMass.get();
+    }
+
+    public static double lightChance() {
+        return COMMON.lightChance.get();
+    }
+
+    public static double mediumChance() {
+        return COMMON.mediumChance.get();
+    }
+
+    public static double heavyChance() {
+        return COMMON.heavyChance.get();
+    }
+
+    public static double snowToMudChance() {
+        return COMMON.snowToMudChance.get();
+    }
+
+    public static int tickInterval() {
+        return COMMON.tickInterval.get();
+    }
+
+    public static boolean eatSnow() {
+        return COMMON.eatSnow.get();
+    }
+
+    public static boolean playSounds() {
+        return COMMON.playSounds.get();
+    }
+
+    public static boolean spawnParticles() {
+        return COMMON.spawnParticles.get();
+    }
 }
