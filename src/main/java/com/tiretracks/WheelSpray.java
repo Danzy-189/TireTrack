@@ -18,8 +18,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * actually travelling: a crawl produces a puff, full speed produces a
  * cloud.</p>
  *
- * <p>Everything here is cosmetic with one exception: dusty ground at speed also
- * raises a {@link DustVeil}, which does affect gameplay.</p>
+ * <p>Everything here is purely cosmetic. Nothing in this class applies an
+ * effect to any entity.</p>
  */
 public final class WheelSpray {
 
@@ -50,8 +50,10 @@ public final class WheelSpray {
             return;
         }
 
-        boolean particles = TireTracksConfig.spawnParticles()
-                && TireTracksConfig.wheelSpray();
+        if (!TireTracksConfig.spawnParticles()
+                || !TireTracksConfig.wheelSpray()) {
+            return;
+        }
 
         BlockPos abovePos = contactPos.above();
         BlockState aboveState = server.getBlockState(abovePos);
@@ -65,53 +67,28 @@ public final class WheelSpray {
          * through shallow water or thin snow reports the solid block below it.
          */
         if (Surfaces.isWater(aboveState)) {
-            if (particles) {
-                spawnWater(server, abovePos, density);
-            }
+            spawnWater(server, abovePos, density);
         } else if (Surfaces.isWater(contactState)) {
-            if (particles) {
-                spawnWater(server, contactPos, density);
-            }
+            spawnWater(server, contactPos, density);
         } else if (Surfaces.isSnow(aboveState)) {
-            if (particles) {
-                spawnSnow(server, abovePos, density);
-            }
+            spawnSnow(server, abovePos, density);
         } else if (Surfaces.isSnow(contactState)) {
-            if (particles) {
-                spawnSnow(server, contactPos, density);
-            }
+            spawnSnow(server, contactPos, density);
         } else if (Surfaces.isDusty(contactState)) {
-            if (particles) {
-                spawnDust(server, contactPos, contactState, density);
-            }
-
-            /*
-             * Gated by its own config option rather than by wheelSpray, since a
-             * blinding cloud is a gameplay effect and not decoration.
-             */
-            DustVeil.trigger(
-                    server,
-                    contactPos,
-                    contactState,
-                    speedBlocksPerSecond
-            );
+            spawnDust(server, contactPos, contactState, density);
         } else if (Surfaces.isSoft(contactState)) {
-            if (particles) {
-                spawnClods(server, contactPos, contactState, density);
-            }
+            spawnClods(server, contactPos, contactState, density);
         } else if (!contactState.isAir()
                 && contactState.getFluidState().isEmpty()) {
             /*
              * Stone, wood, concrete and so on: just a faint scuff.
              */
-            if (particles) {
-                spawnDust(
-                        server,
-                        contactPos,
-                        contactState,
-                        Math.max(1, density / 2)
-                );
-            }
+            spawnDust(
+                    server,
+                    contactPos,
+                    contactState,
+                    Math.max(1, density / 2)
+            );
         } else {
             handled = false;
         }
@@ -119,7 +96,7 @@ public final class WheelSpray {
         /*
          * Rain adds water spray on top of whatever the surface throws up.
          */
-        if (particles && server.isRainingAt(abovePos)) {
+        if (server.isRainingAt(abovePos)) {
             spawnRainSpray(
                     server,
                     contactPos,

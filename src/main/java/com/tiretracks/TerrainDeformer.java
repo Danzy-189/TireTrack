@@ -5,7 +5,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
@@ -91,7 +90,8 @@ public final class TerrainDeformer {
     }
 
     /*
-     * Mass is in kilograms, on the same scale Create Aeronautics reports.
+     * Mass is in kilograms, on the same scale Create Aeronautics reports and the
+     * sub level debug dump shows.
      * With default config: 0-45 kg light, 46-80 kg medium, above 80 kg heavy.
      * Both bounds are inclusive.
      */
@@ -142,8 +142,7 @@ public final class TerrainDeformer {
     }
 
     /**
-     * Deepest stage a vehicle class is able to reach. A quad bike polishes a
-     * footpath, a loaded truck digs it out into a mud hole.
+     * Deepest stage a vehicle class is able to reach.
      */
     public static int maxStageFor(VehicleClass vehicleClass) {
         return switch (vehicleClass) {
@@ -199,7 +198,7 @@ public final class TerrainDeformer {
 
         clearVegetation(level, pos.above());
 
-        playEffects(level, pos, state);
+        spawnBreakParticles(level, pos, state);
     }
 
     private static double getChance(VehicleClass vehicleClass) {
@@ -370,7 +369,7 @@ public final class TerrainDeformer {
                     Block.UPDATE_ALL
             );
 
-            playEffects(level, pos, state);
+            spawnBreakParticles(level, pos, state);
 
             return;
         }
@@ -388,7 +387,7 @@ public final class TerrainDeformer {
                     Block.UPDATE_ALL
             );
 
-            playEffects(level, pos, state);
+            spawnBreakParticles(level, pos, state);
 
             return;
         }
@@ -406,14 +405,14 @@ public final class TerrainDeformer {
                     Block.UPDATE_ALL
             );
 
-            playEffects(level, pos, state);
+            spawnBreakParticles(level, pos, state);
 
             return;
         }
 
         level.removeBlock(pos, false);
 
-        playEffects(level, pos, state);
+        spawnBreakParticles(level, pos, state);
 
         BlockPos belowPos = pos.below();
         BlockState belowState = level.getBlockState(belowPos);
@@ -453,37 +452,33 @@ public final class TerrainDeformer {
         }
     }
 
-    private static void playEffects(
+    /**
+     * A silent puff of the old block. Deformation deliberately makes no sound:
+     * a block break noise under every wheel, several times a second, is noise
+     * rather than feedback.
+     */
+    private static void spawnBreakParticles(
             ServerLevel level,
             BlockPos pos,
             BlockState brokenState
     ) {
-        if (TireTracksConfig.spawnParticles()) {
-            level.sendParticles(
-                    new BlockParticleOption(
-                            ParticleTypes.BLOCK,
-                            brokenState
-                    ),
-                    pos.getX() + 0.5D,
-                    pos.getY() + 1.0D,
-                    pos.getZ() + 0.5D,
-                    6,
-                    0.25D,
-                    0.05D,
-                    0.25D,
-                    0.02D
-            );
+        if (!TireTracksConfig.spawnParticles()) {
+            return;
         }
 
-        if (TireTracksConfig.playSounds()) {
-            level.playSound(
-                    null,
-                    pos,
-                    brokenState.getSoundType().getBreakSound(),
-                    SoundSource.BLOCKS,
-                    0.35F,
-                    0.8F + level.getRandom().nextFloat() * 0.3F
-            );
-        }
+        level.sendParticles(
+                new BlockParticleOption(
+                        ParticleTypes.BLOCK,
+                        brokenState
+                ),
+                pos.getX() + 0.5D,
+                pos.getY() + 1.0D,
+                pos.getZ() + 0.5D,
+                6,
+                0.25D,
+                0.05D,
+                0.25D,
+                0.02D
+        );
     }
 }

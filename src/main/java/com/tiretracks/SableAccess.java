@@ -7,13 +7,23 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Reads the total mass of the vehicle a wheel belongs to from Sable.
+ * Reads the mass of the vehicle a wheel belongs to from Sable.
  *
- * <p>The exact Sable API differs between builds, so it is discovered by
- * reflection. Discovery happens at most a handful of times for the whole game:
- * the resolved field and methods are cached, and a permanent failure flag stops
- * the lookup from ever running again. This is called for every wheel several
- * times a second, so it must be close to free.</p>
+ * <p>Sable groups a vehicle into a sub level, and that sub level carries the
+ * mass directly, exactly as the in game debug dump shows it:</p>
+ *
+ * <pre>
+ * Found 1 sub-levels:
+ *   0c15b9ef-...: Position ... Orientation ... Mass: 79.0
+ * </pre>
+ *
+ * <p>So the sub level is asked for its mass first, and only if that fails does
+ * it fall back to a mass tracker object. The exact API differs between builds,
+ * so it is discovered by reflection, but discovery happens at most a handful of
+ * times for the whole game: the resolved field and methods are cached and a
+ * permanent failure flag stops the lookup from ever running again. This is
+ * called for every wheel several times a second, so it must be close to
+ * free.</p>
  */
 public final class SableAccess {
 
@@ -22,12 +32,19 @@ public final class SableAccess {
     private static final String GET_CONTAINING = "getContaining";
     private static final String GET_MASS_TRACKER = "getMassTracker";
 
-    private static final String[] MASS_VALUE_NAMES = {
+    private static final String[] MASS_METHOD_NAMES = {
             "getMass",
             "mass",
             "getTotalMass",
+            "totalMass",
             "getBodyMass",
             "getNormalMass"
+    };
+
+    private static final String[] MASS_FIELD_NAMES = {
+            "mass",
+            "totalMass",
+            "bodyMass"
     };
 
     /**
@@ -42,22 +59,27 @@ public final class SableAccess {
     private static volatile Method getContaining;
     private static int resolveAttempts;
 
-    /**
+    private static volatile boolean loggedSource;
+
+    /*
      * Cached per concrete class, because different Sable builds hand out
      * different sub level and mass tracker implementations.
      */
-    private static final Map<Class<?>, Optional<Method>> MASS_TRACKER_GETTERS =
+    private static final Map<Class<?>, Optional<Method>> MASS_METHODS =
             new ConcurrentHashMap<>();
 
-    private static final Map<Class<?>, Optional<Method>> MASS_VALUE_GETTERS =
+    private static final Map<Class<?>, Optional<Field>> MASS_FIELDS =
+            new ConcurrentHashMap<>();
+
+    private static final Map<Class<?>, Optional<Method>> MASS_TRACKER_GETTERS =
             new ConcurrentHashMap<>();
 
     private SableAccess() {
     }
 
     /**
-     * Total vehicle mass in kilograms, or the fallback profile mass when Sable
-     * does not expose a readable value.
+     * Vehicle mass in kilograms, or the fallback profile mass when Sable does
+     * not expose a readable value.
      */
     public static double vehicleMass(Object wheelBlockEntity) {
         Double mass = readMass(wheelBlockEntity);
@@ -102,6 +124,18 @@ public final class SableAccess {
                 return null;
             }
 
+            /*
+             * The sub level itself reports the mass in the debug dump, so try it
+             * before anything else.
+             */
+            Double direct = massOf(subLevel);
+
+            if (direct != null) {
+                logSource("sub level");
+
+                return direct;
+            }
+
             Method massTrackerGetter = MASS_TRACKER_GETTERS
                     .computeIfAbsent(
                             subLevel.getClass(),
@@ -117,32 +151,83 @@ public final class SableAccess {
 
             Object massTracker = massTrackerGetter.invoke(subLevel);
 
-            if (massTracker == null) {
-                return null;
+            Double tracked = massOf(massTracker);
+
+            if (tracked != null) {
+                logSource("mass tracker");
             }
 
-            Method massValueGetter = MASS_VALUE_GETTERS
-                    .computeIfAbsent(
-                            massTracker.getClass(),
-                            SableAccess::findMassValueGetter
-                    )
-                    .orElse(null);
-
-            if (massValueGetter == null) {
-                return null;
-            }
-
-            Object value = massValueGetter.invoke(massTracker);
-
-            return value instanceof Number number
-                    ? number.doubleValue()
-                    : null;
+            return tracked;
         } catch (Throwable ignored) {
             /*
              * Never let a mass lookup break vehicle physics.
              */
             return null;
         }
+    }
+
+    /**
+     * Pulls a numeric mass off any object, by getter first and then by field.
+     */
+    private static Double massOf(Object owner) {
+        if (owner == null) {
+            return null;
+        }
+
+        Class<?> type = owner.getClass();
+
+        try {
+            Method getter = MASS_METHODS
+                    .computeIfAbsent(type, SableAccess::findMassMethod)
+                    .orElse(null);
+
+            if (getter != null) {
+                Double value = toMass(getter.invoke(owner));
+
+                if (value != null) {
+                    return value;
+                }
+            }
+
+            Field field = MASS_FIELDS
+                    .computeIfAbsent(type, SableAccess::findMassField)
+                    .orElse(null);
+
+            if (field != null) {
+                return toMass(field.get(owner));
+            }
+        } catch (Throwable ignored) {
+            /*
+             * Treated as unreadable.
+             */
+        }
+
+        return null;
+    }
+
+    private static Double toMass(Object value) {
+        if (!(value instanceof Number number)) {
+            return null;
+        }
+
+        double mass = number.doubleValue();
+
+        return Double.isFinite(mass) && mass > 0.0D
+                ? mass
+                : null;
+    }
+
+    private static void logSource(String source) {
+        if (loggedSource) {
+            return;
+        }
+
+        loggedSource = true;
+
+        TireTracks.LOGGER.info(
+                "[TireTracks] Reading vehicle mass from the Sable {}.",
+                source
+        );
     }
 
     private static boolean ensureResolved() {
@@ -190,28 +275,75 @@ public final class SableAccess {
         if (available) {
             resolved = true;
             TireTracks.LOGGER.info(
-                    "[TireTracks] Sable mass API resolved; vehicle mass classes are live."
+                    "[TireTracks] Sable sub level API resolved; vehicle mass classes are live."
             );
         } else if (resolveAttempts >= MAX_RESOLVE_ATTEMPTS) {
             resolved = true;
             TireTracks.LOGGER.info(
-                    "[TireTracks] Sable mass API not found; every vehicle uses the medium profile."
+                    "[TireTracks] Sable sub level API not found; every vehicle uses the medium profile."
             );
         }
 
         return available;
     }
 
-    private static Optional<Method> findMassValueGetter(Class<?> type) {
-        for (String name : MASS_VALUE_NAMES) {
+    private static Optional<Method> findMassMethod(Class<?> type) {
+        for (String name : MASS_METHOD_NAMES) {
             Method method = findMethod(type, name, 0);
 
-            if (method != null) {
+            if (method != null
+                    && Number.class.isAssignableFrom(box(method.getReturnType()))) {
                 return Optional.of(method);
             }
         }
 
         return Optional.empty();
+    }
+
+    private static Optional<Field> findMassField(Class<?> type) {
+        for (String name : MASS_FIELD_NAMES) {
+            Class<?> current = type;
+
+            while (current != null) {
+                try {
+                    Field field = current.getDeclaredField(name);
+
+                    if (Number.class.isAssignableFrom(box(field.getType()))) {
+                        field.setAccessible(true);
+
+                        return Optional.of(field);
+                    }
+                } catch (Throwable ignored) {
+                    /*
+                     * Not on this class, keep walking up.
+                     */
+                }
+
+                current = current.getSuperclass();
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private static Class<?> box(Class<?> type) {
+        if (type == double.class) {
+            return Double.class;
+        }
+
+        if (type == float.class) {
+            return Float.class;
+        }
+
+        if (type == int.class) {
+            return Integer.class;
+        }
+
+        if (type == long.class) {
+            return Long.class;
+        }
+
+        return type;
     }
 
     private static Method findMethod(

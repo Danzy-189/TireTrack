@@ -30,7 +30,6 @@ public final class TireTracksConfig {
 
         public final ModConfigSpec.IntValue tickInterval;
 
-        public final ModConfigSpec.BooleanValue playSounds;
         public final ModConfigSpec.BooleanValue spawnParticles;
 
         public final ModConfigSpec.IntValue lightMaxStage;
@@ -55,18 +54,13 @@ public final class TireTracksConfig {
         public final ModConfigSpec.BooleanValue carryEnabled;
         public final ModConfigSpec.IntValue carryDistance;
 
-        public final ModConfigSpec.BooleanValue dustVeil;
-        public final ModConfigSpec.DoubleValue dustVeilMinSpeed;
-        public final ModConfigSpec.DoubleValue dustVeilRadius;
-        public final ModConfigSpec.DoubleValue dustVeilSelfRadius;
-        public final ModConfigSpec.IntValue dustVeilDurationTicks;
-
         private Common(ModConfigSpec.Builder builder) {
             builder.comment(
                     "TireTracks terrain deformation settings.",
-                    "Mass is measured in kilograms on the same scale Create Aeronautics (Sable) uses.",
+                    "Mass is measured in kilograms on the same scale Create Aeronautics (Sable) uses,",
+                    "the same number the sub level debug dump prints as 'Mass:'.",
                     "Default profiles: 0-45 kg light, 46-80 kg medium, above 80 kg heavy.",
-                    "If total mass cannot be read, the medium profile is used as fallback.",
+                    "If mass cannot be read, the medium profile is used as fallback.",
                     "Which blocks count as which surface is decided by block tags in",
                     "data/tiretracks/tags/block/, not by this file."
             ).push("general");
@@ -129,11 +123,6 @@ public final class TireTracksConfig {
                     200
             );
 
-            playSounds = builder.define(
-                    "playSounds",
-                    true
-            );
-
             spawnParticles = builder.comment(
                     "Master switch for every particle this mod spawns."
             ).define(
@@ -151,14 +140,17 @@ public final class TireTracksConfig {
                     "  2 coarse dirt",
                     "  3 loose fill: mud when wet, sand in hot dry biomes, gravel otherwise",
                     "  4 puddle: water, or ice in a freezing biome",
-                    "Heavier vehicles are allowed to reach deeper stages."
+                    "Heavier vehicles are allowed to reach deeper stages, but the defaults assume",
+                    "real Create Aeronautics vehicles, which usually weigh 40-80 kg: a medium",
+                    "vehicle must be able to reach the loose fill, otherwise most builds would",
+                    "never dig past coarse dirt at all."
             ).push("ruts");
 
             lightMaxStage = builder.comment(
-                    "Deepest stage a light vehicle can reach. 1 means it only ever packs a footpath."
+                    "Deepest stage a light vehicle can reach."
             ).defineInRange(
                     "lightMaxStage",
-                    1,
+                    2,
                     0,
                     4
             );
@@ -167,7 +159,7 @@ public final class TireTracksConfig {
                     "Deepest stage a medium vehicle can reach."
             ).defineInRange(
                     "mediumMaxStage",
-                    2,
+                    3,
                     0,
                     4
             );
@@ -222,9 +214,9 @@ public final class TireTracksConfig {
 
             builder.comment(
                     "Snow handling.",
-                    "Passes shave layers off, then the last layer is driven into the ground as",
-                    "packed snow, which further passes polish into ice. Both only happen in biomes",
-                    "cold enough to keep them, so no melting holes appear in a temperate lawn."
+                    "Passes shave layers off, then the last layer is driven into the ground as ice,",
+                    "which further passes polish into packed ice. Both only happen in biomes cold",
+                    "enough to keep them, so no melting holes appear in a temperate lawn."
             ).push("snow");
 
             eatSnow = builder.comment(
@@ -235,7 +227,7 @@ public final class TireTracksConfig {
             );
 
             packSnow = builder.comment(
-                    "Whether snow is packed into a track instead of simply disappearing.",
+                    "Whether snow is packed into an ice track instead of simply disappearing.",
                     "Turn off for the old behaviour, where the last layer vanishes."
             ).define(
                     "packSnow",
@@ -243,7 +235,7 @@ public final class TireTracksConfig {
             );
 
             snowToIceChance = builder.comment(
-                    "Chance per check that packed snow is polished into ice."
+                    "Chance per check that a groomed ice track is polished into packed ice."
             ).defineInRange(
                     "snowToIceChance",
                     0.35D,
@@ -329,59 +321,6 @@ public final class TireTracksConfig {
             );
 
             builder.pop();
-
-            builder.comment(
-                    "Dust veil: driving fast over dusty ground raises a cloud that briefly blinds",
-                    "anyone caught inside it. Own crew protection is a distance heuristic, since",
-                    "nothing tells us who is riding which vehicle: everything closer than",
-                    "dustVeilSelfRadius is treated as being on board and is spared."
-            ).push("dust");
-
-            dustVeil = builder.comment(
-                    "Whether the dust cloud blinds nearby entities. Set false for particles only."
-            ).define(
-                    "dustVeil",
-                    true
-            );
-
-            dustVeilMinSpeed = builder.comment(
-                    "Minimum wheel speed in blocks per second before a veil is raised."
-            ).defineInRange(
-                    "dustVeilMinSpeed",
-                    8.0D,
-                    0.0D,
-                    200.0D
-            );
-
-            dustVeilRadius = builder.comment(
-                    "Outer radius of the cloud in blocks."
-            ).defineInRange(
-                    "dustVeilRadius",
-                    10.0D,
-                    0.0D,
-                    64.0D
-            );
-
-            dustVeilSelfRadius = builder.comment(
-                    "Inner radius that is spared, meant to cover the vehicle raising the dust.",
-                    "Raise it on very large builds if your own crew keeps getting blinded."
-            ).defineInRange(
-                    "dustVeilSelfRadius",
-                    4.0D,
-                    0.0D,
-                    64.0D
-            );
-
-            dustVeilDurationTicks = builder.comment(
-                    "Blindness duration in ticks. 20 ticks is one second."
-            ).defineInRange(
-                    "dustVeilDurationTicks",
-                    30,
-                    1,
-                    600
-            );
-
-            builder.pop();
         }
     }
 
@@ -407,10 +346,6 @@ public final class TireTracksConfig {
 
     public static int tickInterval() {
         return COMMON.tickInterval.get();
-    }
-
-    public static boolean playSounds() {
-        return COMMON.playSounds.get();
     }
 
     public static boolean spawnParticles() {
@@ -483,25 +418,5 @@ public final class TireTracksConfig {
 
     public static int carryDistance() {
         return COMMON.carryDistance.get();
-    }
-
-    public static boolean dustVeil() {
-        return COMMON.dustVeil.get();
-    }
-
-    public static double dustVeilMinSpeed() {
-        return COMMON.dustVeilMinSpeed.get();
-    }
-
-    public static double dustVeilRadius() {
-        return COMMON.dustVeilRadius.get();
-    }
-
-    public static double dustVeilSelfRadius() {
-        return COMMON.dustVeilSelfRadius.get();
-    }
-
-    public static int dustVeilDurationTicks() {
-        return COMMON.dustVeilDurationTicks.get();
     }
 }
