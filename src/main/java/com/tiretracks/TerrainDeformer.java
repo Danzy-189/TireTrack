@@ -196,6 +196,8 @@ public final class TerrainDeformer {
                 clearVegetation(level, pos.above());
                 spawnBreakParticles(level, pos, state);
 
+                RoadHealing.touch(level, pos);
+
                 return;
             }
 
@@ -247,6 +249,8 @@ public final class TerrainDeformer {
             clearVegetation(level, pos.above());
             spawnBreakParticles(level, pos, state);
 
+            RoadHealing.touch(level, pos);
+
             return;
         }
 
@@ -288,6 +292,8 @@ public final class TerrainDeformer {
         clearVegetation(level, pos.above());
 
         spawnBreakParticles(level, pos, state);
+
+        RoadHealing.touch(level, pos);
     }
 
     private static double getChance(VehicleClass vehicleClass) {
@@ -531,7 +537,7 @@ public final class TerrainDeformer {
                 >= TireTracksConfig.snowToMudChance()) {
             return;
         }
-
+        
         if (Surfaces.isMuddyable(belowState)) {
             level.setBlock(
                     belowPos,

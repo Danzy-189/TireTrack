@@ -54,6 +54,13 @@ public final class TireTracksConfig {
         public final ModConfigSpec.BooleanValue carryEnabled;
         public final ModConfigSpec.IntValue carryDistance;
 
+        public final ModConfigSpec.BooleanValue puddlesEvaporate;
+        public final ModConfigSpec.DoubleValue puddleEvaporationDays;
+        public final ModConfigSpec.DoubleValue hotBiomeEvaporationMultiplier;
+        public final ModConfigSpec.BooleanValue mudHeals;
+        public final ModConfigSpec.DoubleValue mudHealChance;
+        public final ModConfigSpec.DoubleValue mudHealDays;
+
         private Common(ModConfigSpec.Builder builder) {
             builder.comment(
                     "TireTracks terrain deformation settings.",
@@ -321,6 +328,68 @@ public final class TireTracksConfig {
             );
 
             builder.pop();
+
+            builder.comment(
+                    "Road healing: abandoned roads slowly return to nature.",
+                    "Puddles evaporate in dry weather, mud heals back to turf during rain.",
+                    "Actively used roads stay as they are; only neglected stretches heal."
+            ).push("healing");
+
+            puddlesEvaporate = builder.comment(
+                    "Whether puddles (water and ice in ruts) evaporate in dry weather, turning back into mud."
+            ).define(
+                    "puddlesEvaporate",
+                    true
+            );
+
+            puddleEvaporationDays = builder.comment(
+                    "Real-world days without rain before a puddle evaporates. Raining on the block resets the timer.",
+                    "Hot biomes (base temperature >= dryBiomeTemperature) evaporate faster, see hotBiomeEvaporationMultiplier."
+            ).defineInRange(
+                    "puddleEvaporationDays",
+                    1.0D,
+                    0.01D,
+                    30.0D
+            );
+
+            hotBiomeEvaporationMultiplier = builder.comment(
+                    "How much faster puddles evaporate in hot biomes. 2.0 means twice as fast (half the days)."
+            ).defineInRange(
+                    "hotBiomeEvaporationMultiplier",
+                    2.0D,
+                    1.0D,
+                    10.0D
+            );
+
+            mudHeals = builder.comment(
+                    "Whether mud, coarse dirt and dirt paths slowly heal back to grass during rain,",
+                    "if they have not been touched by wheels for a while."
+            ).define(
+                    "mudHeals",
+                    true
+            );
+
+            mudHealChance = builder.comment(
+                    "Chance per check that an abandoned rut heals one stage back toward turf.",
+                    "Only applies during rain, after mudHealDays have passed without wheel contact."
+            ).defineInRange(
+                    "mudHealChance",
+                    0.08D,
+                    0.0D,
+                    1.0D
+            );
+
+            mudHealDays = builder.comment(
+                    "Real-world days a rut must be untouched before it can start healing.",
+                    "Wheels reset the timer, so active roads never heal."
+            ).defineInRange(
+                    "mudHealDays",
+                    3.0D,
+                    0.01D,
+                    30.0D
+            );
+
+            builder.pop();
         }
     }
 
@@ -418,5 +487,29 @@ public final class TireTracksConfig {
 
     public static int carryDistance() {
         return COMMON.carryDistance.get();
+    }
+
+    public static boolean puddlesEvaporate() {
+        return COMMON.puddlesEvaporate.get();
+    }
+
+    public static double puddleEvaporationDays() {
+        return COMMON.puddleEvaporationDays.get();
+    }
+
+    public static double hotBiomeEvaporationMultiplier() {
+        return COMMON.hotBiomeEvaporationMultiplier.get();
+    }
+
+    public static boolean mudHeals() {
+        return COMMON.mudHeals.get();
+    }
+
+    public static double mudHealChance() {
+        return COMMON.mudHealChance.get();
+    }
+
+    public static double mudHealDays() {
+        return COMMON.mudHealDays.get();
     }
 }
