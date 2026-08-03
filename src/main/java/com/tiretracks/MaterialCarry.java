@@ -67,12 +67,18 @@ public final class MaterialCarry {
         spawnTrail(level, pos, carried.defaultBlockState());
     }
 
+    /**
+     * Grass and moss are swapped for plain dirt here too: what sticks to a tyre
+     * is soil, not lawn.
+     */
     private static void spawnTrail(
             ServerLevel level,
             BlockPos pos,
             BlockState carriedState
     ) {
         int density = Math.max(1, TireTracksConfig.sprayDensity());
+
+        BlockState particleState = Surfaces.particleStateFor(carriedState);
 
         double x = pos.getX() + 0.5D;
         double y = pos.getY() + 1.0D;
@@ -81,12 +87,12 @@ public final class MaterialCarry {
         level.sendParticles(
                 new BlockParticleOption(
                         ParticleTypes.FALLING_DUST,
-                        carriedState
+                        particleState
                 ),
                 x,
                 y + 0.15D,
                 z,
-                density,
+                Particles.count(density),
                 0.28D,
                 0.05D,
                 0.28D,
@@ -96,12 +102,12 @@ public final class MaterialCarry {
         level.sendParticles(
                 new BlockParticleOption(
                         ParticleTypes.BLOCK,
-                        carriedState
+                        particleState
                 ),
                 x,
                 y,
                 z,
-                Math.max(1, density / 2),
+                Particles.fraction(density, 0.5D),
                 0.22D,
                 0.02D,
                 0.22D,

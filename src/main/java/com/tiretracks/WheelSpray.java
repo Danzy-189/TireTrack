@@ -16,7 +16,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * {@link TireTracksTags}, so the particles always match what the terrain
  * deformer thinks the ground is. Amount scales with how fast the wheel is
  * actually travelling: a crawl produces a puff, full speed produces a
- * cloud.</p>
+ * cloud. Every count then goes through {@link Particles#count(int)}, so the
+ * whole mod thickens or thins with one config value.</p>
  *
  * <p>Everything here is purely cosmetic. Nothing in this class applies an
  * effect to any entity.</p>
@@ -141,7 +142,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 0.9D,
                 pos.getZ() + 0.5D,
-                density * 3,
+                Particles.count(density * 3),
                 0.3D,
                 0.1D,
                 0.3D,
@@ -153,7 +154,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 0.6D,
                 pos.getZ() + 0.5D,
-                density,
+                Particles.count(density),
                 0.25D,
                 0.05D,
                 0.25D,
@@ -174,7 +175,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 0.4D,
                 pos.getZ() + 0.5D,
-                density * 3,
+                Particles.count(density * 3),
                 0.3D,
                 0.15D,
                 0.3D,
@@ -189,7 +190,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 0.3D,
                 pos.getZ() + 0.5D,
-                density,
+                Particles.count(density),
                 0.25D,
                 0.05D,
                 0.25D,
@@ -211,7 +212,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 1.05D,
                 pos.getZ() + 0.5D,
-                density * 2,
+                Particles.count(density * 2),
                 0.35D,
                 0.05D,
                 0.35D,
@@ -221,12 +222,12 @@ public final class WheelSpray {
         level.sendParticles(
                 new BlockParticleOption(
                         ParticleTypes.BLOCK,
-                        state
+                        Surfaces.particleStateFor(state)
                 ),
                 pos.getX() + 0.5D,
                 pos.getY() + 1.0D,
                 pos.getZ() + 0.5D,
-                density,
+                Particles.count(density),
                 0.3D,
                 0.05D,
                 0.3D,
@@ -236,6 +237,10 @@ public final class WheelSpray {
 
     /*
      * Turf, dirt, mud: chunks kicked backwards, wet surfaces also splash.
+     *
+     * Grass, podzol and moss spray plain dirt instead of themselves: block
+     * particles take their colour from the block texture, and green flecks
+     * flying out from under a tyre looked like confetti rather than soil.
      */
     private static void spawnClods(
             ServerLevel level,
@@ -246,12 +251,12 @@ public final class WheelSpray {
         level.sendParticles(
                 new BlockParticleOption(
                         ParticleTypes.BLOCK,
-                        state
+                        Surfaces.particleStateFor(state)
                 ),
                 pos.getX() + 0.5D,
                 pos.getY() + 1.0D,
                 pos.getZ() + 0.5D,
-                density * 2,
+                Particles.count(density * 2),
                 0.3D,
                 0.1D,
                 0.3D,
@@ -264,7 +269,7 @@ public final class WheelSpray {
                     pos.getX() + 0.5D,
                     pos.getY() + 1.0D,
                     pos.getZ() + 0.5D,
-                    density,
+                    Particles.count(density),
                     0.25D,
                     0.05D,
                     0.25D,
@@ -279,7 +284,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 1.05D,
                 pos.getZ() + 0.5D,
-                Math.max(1, density / 2),
+                Particles.fraction(density, 0.5D),
                 0.25D,
                 0.05D,
                 0.25D,
@@ -288,7 +293,12 @@ public final class WheelSpray {
     }
 
     /*
-     * Rain: droplets flicked off the tread, even on solid ground.
+     * Rain: droplets flicked off the tread, even on solid ground, plus bubbles
+     * popping in the film of water the wheel is rolling through.
+     *
+     * BUBBLE_POP is used rather than BUBBLE on purpose: the plain bubble
+     * particle deletes itself the moment it finds it is not inside water, so on
+     * a wet road it would never be visible at all.
      */
     private static void spawnRainSpray(
             ServerLevel level,
@@ -300,7 +310,7 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 1.1D,
                 pos.getZ() + 0.5D,
-                density * 2,
+                Particles.count(density * 2),
                 0.35D,
                 0.1D,
                 0.35D,
@@ -312,11 +322,23 @@ public final class WheelSpray {
                 pos.getX() + 0.5D,
                 pos.getY() + 1.0D,
                 pos.getZ() + 0.5D,
-                density,
+                Particles.count(density),
                 0.3D,
                 0.05D,
                 0.3D,
                 0.05D
+        );
+
+        level.sendParticles(
+                ParticleTypes.BUBBLE_POP,
+                pos.getX() + 0.5D,
+                pos.getY() + 1.05D,
+                pos.getZ() + 0.5D,
+                Particles.count(density * 2),
+                0.3D,
+                0.08D,
+                0.3D,
+                0.03D
         );
     }
 }
