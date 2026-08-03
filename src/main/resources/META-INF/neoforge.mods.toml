@@ -4,15 +4,17 @@ license = "MIT"
 
 [[mods]]
 modId = "tiretracks"
-version = "3.1.0"
+version = "3.2.0"
 displayName = "TireTracks"
 authors = "Danzy"
 description = '''
 Wheels from Create Aeronautics (Offroad / Sable / Simulated) leave real marks on the world.
-Ground wears down stage by stage into a rut, from turf to a footpath to coarse dirt to mud,
-gravel or sand, and a soaked rut can fill with water or freeze into ice.
+Ground wears down stage by stage into a rut, from turf to coarse dirt to mud, gravel or sand,
+and a soaked rut can fill with water or freeze into ice.
 Snow is not eaten but driven into the ground as ice and polished into a packed ice road.
-Wheels throw up water, snow, dust or clods and drag mud onto clean ground for a few blocks.
+Machines of 150 kg and up get their own destruction: they crack stone bricks, crush rock into
+gravel, collapse soil into an open hole and bury themselves in sand.
+Wheels throw up water, snow, dust, bubbles or clods and drag mud onto clean ground for a few blocks.
 Which blocks count as which surface is decided by block tags, so any pack can extend it.
 Everything is silent and applies no effects to players: only blocks and particles.
 '''

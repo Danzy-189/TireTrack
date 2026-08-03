@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.tiretracks'
-version = '3.1.0'
+version = '3.2.0'
 base { archivesName = 'TireTracks' }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
@@ -51,9 +51,9 @@ jar {
     manifest {
         attributes([
             'Specification-Title'   : 'TireTracks',
-            'Specification-Version' : '3.1.0',
+            'Specification-Version' : '3.2.0',
             'Implementation-Title'  : 'TireTracks',
-            'Implementation-Version': '3.1.0'
+            'Implementation-Version': '3.2.0'
         ])
     }
 }
