@@ -33,8 +33,7 @@ public final class TireTracksTags {
     public static final TagKey<Block> SOFT = block("soft");
 
     /**
-     * Dry granular ground that raises a dust plume, and the only ground that
-     * can raise a dust veil at speed.
+     * Dry granular ground that raises a dust plume.
      */
     public static final TagKey<Block> DUSTY = block("dusty");
 
@@ -58,6 +57,12 @@ public final class TireTracksTags {
      * Ground that snow may be packed into, turning it into an ice track.
      */
     public static final TagKey<Block> PACKABLE_GROUND = block("packable_ground");
+
+    /**
+     * Blocks whose particles are replaced with plain dirt, so a green top face
+     * never sprays green confetti out from under a wheel.
+     */
+    public static final TagKey<Block> DIRT_PARTICLES = block("dirt_particles");
 
     private static TagKey<Block> block(String path) {
         return TagKey.create(

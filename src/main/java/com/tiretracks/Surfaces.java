@@ -76,4 +76,21 @@ public final class Surfaces {
     public static boolean sticksToTyres(BlockState state) {
         return isWet(state) || isSoft(state);
     }
+
+    /**
+     * The block a particle should be textured with.
+     *
+     * <p>Block particles take their colour from the block texture, and grass,
+     * podzol, moss and friends have a green top face. A wheel tearing through a
+     * lawn should throw up soil, not green confetti, so everything in
+     * {@code #tiretracks:dirt_particles} sprays plain dirt instead of
+     * itself.</p>
+     */
+    public static BlockState particleStateFor(BlockState state) {
+        if (state.is(TireTracksTags.DIRT_PARTICLES)) {
+            return Blocks.DIRT.defaultBlockState();
+        }
+
+        return state;
+    }
 }
