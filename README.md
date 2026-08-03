@@ -1,271 +1,140 @@
-# TireTracks
+# TireTracks 3.2.0
 
-TireTracks makes Create Aeronautics vehicles (Offroad / Sable / Simulated) leave real marks on the world.
-Ground does not just change once and stay that way: it wears down stage by stage into a rut, snow is packed
-into an ice road instead of vanishing, wheels throw up surface appropriate spray, and mud gets dragged onto
-clean ground for a few blocks. **Abandoned roads slowly heal**: mud heals back to grass during rain, but
-actively used tracks stay as they are.
+Wheels from **Create Aeronautics** (Offroad / Sable / Simulated) leave real marks on the world.
 
-- Minecraft 1.21.1, NeoForge 21.1.235, Java 21
-- Version 3.1.0
-- Server side logic only. No client mod required, no packets, no new blocks or items.
-- Silent, and no status effect is ever applied to a player: this mod only places blocks and spawns particles.
+Minecraft **1.21.1**, NeoForge **21.1.235**, Java **21**.
 
-## Requirements
+---
 
-Offroad, Sable and Simulated are optional dependencies. The mixin targets the wheel mount class by name with
-`@Pseudo`, so a missing or renamed class makes TireTracks idle instead of crashing the game.
+## What it does
 
-## Progressive ruts
+### Roads that build themselves
 
-Repeated passes wear the ground deeper, one stage at a time. The current stage is stored in the world as the
-block standing there, so progress survives restarts and chunk unloads without any extra save data.
+Ground wears down one stage at a time, and the stage **is the block standing there**, so progress survives restarts and chunk unloads without a single byte of extra save data.
 
-| Stage | Block | Notes |
-| --- | --- | --- |
-| 0 | anything in `#tiretracks:turf` | grass, dirt, podzol, mycelium, moss, farmland |
-| 1 | dirt path | a packed footpath |
-| 2 | coarse dirt | a worn track |
-| 3 | mud, sand or gravel | depends on the weather, see below |
-| 4 | water, or ice in a freezing biome | a puddle in a soaked rut |
-
-How fast the ground gives way, and how deep it can go, depends on the vehicle's mass class.
-
-| Class | Mass | Chance per check | Deepest stage |
-| --- | --- | --- | --- |
-| Light | 0-45 kg | 0.12 | 2, coarse dirt |
-| Medium | 46-80 kg | 0.30 | 3, loose fill |
-| Heavy | above 80 kg | 0.50 | 4, puddle |
-
-Mass is read straight off the Sable sub level, in kilograms: it is the same number the in game sub level debug
-dump prints as `Mass:`. Both bounds are inclusive, so exactly 45 kg is light and exactly 80 kg is medium. If
-this Sable build does not expose a readable value, every vehicle falls back to the medium profile.
-
-The stage caps are tuned for vehicles that actually get built, which usually weigh 40-80 kg. Capping the medium
-class at coarse dirt would mean almost nothing in the game ever digs a real rut. Raise or lower them freely with
-`lightMaxStage`, `mediumMaxStage` and `heavyMaxStage`.
-
-Sand and gravel are gravity blocks, so they are only placed when the block below is solid. Otherwise the rut
-would punch a hole through the terrain instead of staying a rut.
-
-## Sand and stone
-
-### Sand (sand, red sand)
-
-- **Light vehicles** leave no trace.
-- **Medium vehicles** pack the sand down into sandstone or red sandstone, which looks like a beaten path but does
-  not stand out too much against the desert.
-- **Heavy vehicles** sink the sand entirely, leaving a depression in the terrain.
-
-A heavy vehicle can only sink sand when there is solid ground below, otherwise it would cascade down through the
-terrain.
-
-### Stone
-
-- **Light vehicles** leave no trace.
-- **Medium and heavy vehicles** crack stone into cobblestone or andesite, chosen at random. The mix keeps the
-  track from looking artificial.
-
-## Road healing
-
-Abandoned roads slowly return to nature. Actively used roads — anything touched by wheels recently — stay as
-they are. Time is measured in **Minecraft days**: 1 day = 24000 ticks = 20 minutes real time.
-
-### Mud heals back to grass
-
-Mud, coarse dirt and dirt paths can heal back toward grass **during rain**, if they have not been touched by
-wheels for **3 Minecraft days** (1 hour real time). The chance per check is 60%, so healing is reasonably quick
-once the timer expires. Healed blocks turn into grass if there is grass nearby (within 3 blocks), otherwise into
-plain dirt.
-
-Wheels reset the timer, so an active road never heals. This means your main routes stay as roads, while
-abandoned side paths slowly vanish.
-
-Healing timers are in-memory and reset when a chunk unloads. This is intentional: the mechanic is about ongoing
-activity, not forensic history. A chunk that stays loaded will heal as expected; a chunk that is only loaded
-briefly will take longer.
-
-## Wet and dry ground
-
-Moisture decides both how fast the ground gives way and what it turns into at stage 3.
-
-| Condition | Chance multiplier | Loose fill |
-| --- | --- | --- |
-| Raining on the block, or water next to it | 1.6 | mud |
-| Hot dry biome, base temperature 0.95 and up | 0.85 | sand |
-| Anything else | 1.0 | gravel |
-
-## Puddles
-
-A fully worn mud rut in the rain can fill with water, and in a freezing biome it becomes ice instead, so last
-season's track turns into this winter's slippery spot. A frozen puddle then keeps progressing along the snow
-chain below and can be polished into packed ice.
-
-A puddle is only created when the rut has a solid floor and solid ground on all four sides. Water can never run
-off across the landscape or down a slope.
-
-## Snow packing
-
-Snow is compressed rather than deleted, which is the one mechanic here that improves the ground instead of
-ruining it: drive the same line often enough and you groom yourself a fast ice road.
-
-1. Snow blocks and powder snow collapse into a seven layer stack.
-2. Each further pass shaves one layer off.
-3. The last layer is driven into the ground, and the ground below becomes ice, flush with the surface, so there
-   is no bump for the suspension.
-4. Further passes polish that ice into packed ice, which never melts.
-
-Vanilla has no packed snow block, and a snow block cannot play that role either: it is already the entry point
-of this chain, so a groomed track would collapse back into loose layers forever. Ice never turns back into snow
-and is genuinely faster to drive on.
-
-Packing only happens in biomes cold enough to keep it (base temperature below 0.15). In warmer places, or with
-`packSnow = false`, the last layer simply disappears and may leave mud behind, which is the old 3.0 behaviour.
-
-## Wheel spray
-
-| Surface | Particles |
+| Stage | Block |
 | --- | --- |
-| Water, shallow or deep | splashes and bubbles |
-| Rain, on any surface | extra droplets flicked off the tread |
-| Snow, ice, powder snow | snowflakes and snow crumbs |
-| `#tiretracks:dusty` | dust plume tinted with the block |
-| `#tiretracks:soft` | flying clods, plus splashes on wet ground |
-| Stone, wood, concrete and so on | a faint scuff |
+| 0 | turf (anything in `#tiretracks:turf`) |
+| 1 | coarse dirt |
+| 2 | loose fill: **mud** when wet, **sand** in hot dry biomes, **gravel** otherwise |
+| 3 | puddle: **water**, or **ice** in a freezing biome |
 
-The block above the contact point is checked first, because shallow water and thin snow have no collision and
-the wheel raycast reports the solid block underneath them.
+Dirt paths are **not** part of the chain. A wheel churns ground up, it does not tamp a tidy footpath. Existing paths, vanilla or from an older version, still count as stage 0 and keep wearing onward.
 
-Spray amount scales with wheel speed. Speed is derived from how long the wheel needed to travel from one block
-to the next, which costs nothing and needs no access to the physics engine. Spray is also skipped while a wheel
-stays inside the same block, so a parked vehicle stays quiet.
+A puddle only forms in a rut walled in on all four sides with a solid floor, so water can never run off across the landscape.
 
-## Material carry-over
+### Weight matters
 
-Leaving mud or soil behind on clean ground: the tread keeps the last material it touched and drops a trail of
-falling dust for the next few blocks. Driving through water rinses it clean immediately.
+Mass is read straight from the vehicle, on the same kilogram scale the sub level debug dump prints as `Mass:`.
 
-This is particles only. No blocks are placed on the surface you drive over, because smearing real mud onto
-somebody's stone road would be griefing rather than flavour.
+| Class | Mass | Reaches |
+| --- | --- | --- |
+| Light | 0 – 45 kg | coarse dirt |
+| Medium | 46 – 80 kg | loose fill |
+| Heavy | 81 – 149 kg | puddles |
+| Very heavy | 150 kg and up | puddles, plus hard ground damage |
 
-## Block tags
+If mass cannot be read, the medium profile is used.
 
-No surface list is hardcoded. Everything lives in `data/tiretracks/tags/block/` and can be extended or replaced
-by any datapack or modpack.
+### Very heavy machines (150 kg+)
 
-| Tag | Meaning |
-| --- | --- |
-| `#tiretracks:immune` | never touched by this mod. Empty by default, free blacklist |
-| `#tiretracks:turf` | entry point of the rut chain |
-| `#tiretracks:soft` | loose soil, throws up clods |
-| `#tiretracks:dusty` | dry granular ground, raises a dust plume |
-| `#tiretracks:wet` | wet ground: splashes instead of dust, sticks to tyres |
-| `#tiretracks:snow` | treated as a snow surface, including the ice a groomed track turns into |
-| `#tiretracks:muddyable` | ground the last snow layer may turn into mud |
-| `#tiretracks:packable_ground` | ground that may be turned into an ice track |
+* **Stone bricks** crack into cracked stone bricks. Cracked is the end of the line: a paved road gets scarred, never destroyed.
+* **Cobblestone and andesite** can be crushed further into gravel, only where there is solid ground below.
+* **Soil** can simply give way and leave an open hole one block deep. Deliberately rare, and never over a cave.
+* **Sand** does not just dent: the machine punches two blocks down and the sand above caves in behind it, so it genuinely buries itself.
 
-Blocks with a block entity are always protected, so a chest or a machine is never ground into mud.
+### Every surface reacts differently
 
-## Configuration
+* **Sand and red sand** — medium packs it into sandstone, heavy punches a block out, very heavy digs a pit. Light vehicles leave no trace.
+* **Stone** — stubborn on purpose. Only a fraction of the normal wear chance, cracking into cobblestone or andesite at random so the track blends into the rock instead of reading as a laid stripe.
+* **Snow** — not eaten but compressed: layers are shaved off, the last one is driven into the ground as ice, and further passes polish that into packed ice. Only in biomes cold enough to keep it.
 
-`config/tiretracks-common.toml`
+### Particles that sell the motion
+
+Water splashes and bubbles, sand and gravel raise a dust plume, snow throws flakes, soil kicks flying clods. Amount scales with actual wheel speed. Grass, podzol and moss spray **plain dirt**, never green flecks. Driving in the rain adds droplets and popping bubbles from under the wheels.
+
+Mud picked up on soft ground trails behind the tyre for a few blocks and is rinsed off by water. Particles only: no blocks are smeared onto anyone's road.
+
+### Built to be tuned
+
+Which block counts as which surface is decided by block tags in `data/tiretracks/tags/block/`, so any datapack or modpack can extend or replace the lists without touching the code:
+
+`immune`, `turf`, `soft`, `dusty`, `wet`, `snow`, `muddyable`, `packable_ground`, `dirt_particles`.
+
+`immune` is a free blacklist, and blocks with a block entity are always protected.
+
+### Quiet by design
+
+No sounds, no effects on players. Only blocks and particles.
+
+---
+
+## Config
+
+`config/tiretracks-common.toml`, generated on first launch.
+
+**Delete the old file when upgrading from 3.1.x** — the stage numbers changed and several keys were added or removed.
 
 ### `[general]`
 
-| Option | Default | Meaning |
+| Key | Default | Meaning |
 | --- | --- | --- |
-| `lightVehicleMaxMass` | 45.0 | upper mass bound of a light vehicle, in kg |
-| `mediumVehicleMaxMass` | 80.0 | upper mass bound of a medium vehicle, in kg |
-| `lightChance` | 0.12 | chance per check that a light vehicle wears the ground deeper |
-| `mediumChance` | 0.30 | same for medium |
-| `heavyChance` | 0.50 | same for heavy |
+| `lightVehicleMaxMass` | 45.0 | upper bound of the light profile, kg |
+| `mediumVehicleMaxMass` | 80.0 | upper bound of the medium profile, kg |
+| `veryHeavyVehicleMinMass` | 150.0 | mass from which a vehicle is very heavy |
+| `lightChance` | 0.06 | wear chance per check, light |
+| `mediumChance` | 0.15 | wear chance per check, medium |
+| `heavyChance` | 0.30 | wear chance per check, heavy |
+| `veryHeavyChance` | 0.45 | wear chance per check, very heavy |
 | `tickInterval` | 4 | physics ticks between terrain checks per wheel |
-| `spawnParticles` | true | master switch for every particle this mod spawns |
+| `spawnParticles` | true | master switch for every particle |
+| `particleVolumeMultiplier` | 1.5 | global particle amount multiplier |
 
 ### `[ruts]`
 
-| Option | Default | Meaning |
+| Key | Default |
+| --- | --- |
+| `lightMaxStage` | 1 |
+| `mediumMaxStage` | 2 |
+| `heavyMaxStage` | 3 |
+| `veryHeavyMaxStage` | 3 |
+| `puddles` | true |
+| `wetChanceMultiplier` | 1.6 |
+| `dryChanceMultiplier` | 0.85 |
+| `dryBiomeTemperature` | 0.95 |
+
+### `[hardground]`
+
+| Key | Default | Meaning |
 | --- | --- | --- |
-| `lightMaxStage` | 2 | deepest stage a light vehicle can reach |
-| `mediumMaxStage` | 3 | deepest stage a medium vehicle can reach |
-| `heavyMaxStage` | 4 | deepest stage a heavy vehicle can reach |
-| `puddles` | true | allow worn wet ruts to fill with water or ice |
-| `wetChanceMultiplier` | 1.6 | chance multiplier in rain or next to water |
-| `dryChanceMultiplier` | 0.85 | chance multiplier in hot dry biomes |
-| `dryBiomeTemperature` | 0.95 | biome base temperature from which ground counts as dry |
+| `stoneCrackMultiplier` | 0.25 | fraction of the vehicle chance applied on stone |
+| `stoneCrushChance` | 0.05 | cobble/andesite crushed into gravel, very heavy only |
+| `stoneBrickCrackChance` | 0.08 | stone bricks cracked, very heavy only |
+| `groundCollapseChance` | 0.02 | soil collapses into a hole, very heavy only |
+| `sandSinkDepth` | 2 | sand blocks punched through in one go, very heavy |
 
 ### `[snow]`
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `eatSnow` | true | whether wheels affect snow at all |
-| `packSnow` | true | pack snow into an ice track instead of removing it |
-| `snowToIceChance` | 0.35 | chance per check that a groomed ice track is polished into packed ice |
-| `snowToMudChance` | 0.25 | chance the last layer leaves mud, where packing is impossible |
+`eatSnow` true, `packSnow` true, `snowToIceChance` 0.35, `snowToMudChance` 0.25
 
 ### `[spray]`
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `wheelSpray` | true | surface particles while driving |
-| `sprayInterval` | 2 | physics ticks between puffs per wheel |
-| `sprayDensity` | 2 | base particle amount per puff |
-| `sprayFullSpeed` | 10.0 | speed in blocks per second at which spray is at full strength |
+`wheelSpray` true, `sprayInterval` 2, `sprayDensity` 2, `sprayFullSpeed` 10.0
 
 ### `[carry]`
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `carryEnabled` | true | drag mud onto clean ground |
-| `carryDistance` | 6 | blocks of clean ground that still show a trail |
+`carryEnabled` true, `carryDistance` 6
 
-### `[healing]`
+---
 
-**Time is measured in Minecraft days. 1 day = 24000 ticks = 20 minutes real time.**
+## Compatibility
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `mudHeals` | true | mud/coarse dirt/paths heal back to grass during rain |
-| `mudHealChance` | 0.6 | chance per check that an untouched rut heals one stage (60%) |
-| `mudHealDays` | 3.0 | Minecraft days a rut must be untouched before it can heal (1 hour real time) |
-
-Upgrading from 3.0 moves `eatSnow` and `snowToMudChance` from `[general]` into `[snow]`, and drops `playSounds`
-along with the whole `[dust]` section. Delete the old config file to regenerate it cleanly, otherwise the
-removed keys just sit there unused.
-
-## Troubleshooting
-
-1. **Nothing happens at all.** The mixin is optional by design. Check the log for a line about the Sable sub
-   level API; if the wheel mount class was renamed in a newer Offroad build, the redirect simply never applies.
-2. **Every vehicle behaves as medium.** The mass lookup failed, which is the intended fallback. It is logged once
-   at startup.
-3. **The rut stops at a certain block.** That is the stage cap for that mass class. Compare the vehicle's mass
-   from the sub level debug dump against `lightVehicleMaxMass` / `mediumVehicleMaxMass`, then raise the matching
-   `*MaxStage`.
-4. **Too destructive.** Lower the chances, cap the stages, or add blocks to `#tiretracks:immune`.
-5. **I do not want ice roads.** Set `packSnow = false`, or remove `minecraft:ice` from `#tiretracks:snow` to stop
-   the polishing step while keeping the rest.
-6. **Few particles at very low speed.** Expected: spray needs the wheel to enter a new block, and density scales
-   with speed. Lower `sprayFullSpeed` if you want thick spray while crawling.
-7. **Sand should not sink / stone should not crack.** Add `minecraft:sand`, `minecraft:red_sand`, or `minecraft:stone`
-   to `#tiretracks:immune`.
-8. **Roads heal too fast / too slow.** Adjust `mudHealDays` and `mudHealChance`. Set `mudHeals = false` to disable
-   healing entirely.
+The hook is a `@Pseudo` mixin matched by class name, so a missing or renamed Offroad build makes TireTracks sit idle instead of crashing the game. All Create Aeronautics dependencies are optional.
 
 ## Building
-
-This repository has no Gradle wrapper committed. Use a local Gradle 8.10.2 or newer:
 
 ```
 gradle clean build
 ```
 
-The jar lands in `build/libs/TireTracks-3.1.0.jar`. The GitHub Actions workflow `Build TireTracks` does the same
-on demand.
-
-`DUST_PLUME` particles require Minecraft 1.20.5 or newer. That is fine on 1.21.1, but a backport below that
-version would need a different particle.
-
-## License
-
-MIT.
+Output: `build/libs/TireTracks-3.2.0.jar`. The GitHub Actions workflow **Build TireTracks** does the same on demand.
