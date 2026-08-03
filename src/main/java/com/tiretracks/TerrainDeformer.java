@@ -21,10 +21,17 @@ import net.minecraft.world.level.material.Fluids;
  * the world itself, as the block that is standing there:</p>
  *
  * <pre>
- * turf -> dirt path -> coarse dirt -> loose fill -> puddle
- * sand -> sandstone (medium) or gone (heavy)
- * stone -> cobblestone or andesite (medium+)
+ * turf -&gt; coarse dirt -&gt; loose fill -&gt; puddle
+ * sand -&gt; sandstone (medium), one block down (heavy), a pit (very heavy)
+ * stone -&gt; cobblestone or andesite -&gt; gravel (very heavy only)
+ * stone bricks -&gt; cracked stone bricks (very heavy only)
  * </pre>
+ *
+ * <p>Dirt paths are deliberately not part of the chain. A wheel churns ground
+ * up, it does not tamp a tidy footpath, and a grass block turning into the
+ * neat vanilla path block looked like somebody had walked there with a shovel.
+ * Existing paths, vanilla or from an older version of this mod, still count as
+ * the first stage and wear onward into coarse dirt.</p>
  *
  * <p>The loose fill depends on the weather: mud when wet, sand in hot dry
  * biomes, gravel otherwise. Only a wet, fully worn rut can become a puddle, and
@@ -37,10 +44,9 @@ public final class TerrainDeformer {
 
     public static final int STAGE_NONE = -1;
     public static final int STAGE_TURF = 0;
-    public static final int STAGE_PATH = 1;
-    public static final int STAGE_COARSE = 2;
-    public static final int STAGE_LOOSE = 3;
-    public static final int STAGE_PUDDLE = 4;
+    public static final int STAGE_COARSE = 1;
+    public static final int STAGE_LOOSE = 2;
+    public static final int STAGE_PUDDLE = 3;
 
     private TerrainDeformer() {
     }
@@ -48,7 +54,8 @@ public final class TerrainDeformer {
     public enum VehicleClass {
         LIGHT,
         MEDIUM,
-        HEAVY
+        HEAVY,
+        VERY_HEAVY
     }
 
     public static void deformAt(
@@ -94,8 +101,8 @@ public final class TerrainDeformer {
     /*
      * Mass is in kilograms, on the same scale Create Aeronautics reports and the
      * sub level debug dump shows.
-     * With default config: 0-45 kg light, 46-80 kg medium, above 80 kg heavy.
-     * Both bounds are inclusive.
+     * With default config: 0-45 kg light, 46-80 kg medium, 81-149 kg heavy,
+     * 150 kg and above very heavy. All bounds are inclusive.
      */
     public static VehicleClass getVehicleClass(double mass) {
         if (!Double.isFinite(mass) || mass <= 0.0D) {
@@ -110,7 +117,11 @@ public final class TerrainDeformer {
             return VehicleClass.MEDIUM;
         }
 
-        return VehicleClass.HEAVY;
+        if (mass < TireTracksConfig.veryHeavyVehicleMinMass()) {
+            return VehicleClass.HEAVY;
+        }
+
+        return VehicleClass.VERY_HEAVY;
     }
 
     /**
@@ -119,10 +130,6 @@ public final class TerrainDeformer {
     public static int stageOf(BlockState state) {
         if (state.is(Blocks.WATER) || state.is(Blocks.ICE)) {
             return STAGE_PUDDLE;
-        }
-
-        if (state.is(Blocks.DIRT_PATH)) {
-            return STAGE_PATH;
         }
 
         if (state.is(Blocks.COARSE_DIRT)) {
@@ -134,6 +141,15 @@ public final class TerrainDeformer {
                 || state.is(Blocks.CLAY)
                 || state.is(BlockTags.SAND)) {
             return STAGE_LOOSE;
+        }
+
+        /*
+         * Dirt paths are never created any more, but vanilla ones and leftovers
+         * from older versions still exist. Treating them as the first stage lets
+         * them keep wearing down instead of freezing halfway through a road.
+         */
+        if (state.is(Blocks.DIRT_PATH)) {
+            return STAGE_TURF;
         }
 
         if (Surfaces.isTurf(state)) {
@@ -151,6 +167,7 @@ public final class TerrainDeformer {
             case LIGHT -> TireTracksConfig.lightMaxStage();
             case MEDIUM -> TireTracksConfig.mediumMaxStage();
             case HEAVY -> TireTracksConfig.heavyMaxStage();
+            case VERY_HEAVY -> TireTracksConfig.veryHeavyMaxStage();
         };
     }
 
@@ -167,90 +184,40 @@ public final class TerrainDeformer {
         RandomSource random = level.getRandom();
 
         /*
-         * Sand: light vehicles leave no trace, medium compact it into sandstone,
-         * heavy sink it entirely, leaving a depression. Red sand behaves the
-         * same, turning into red sandstone.
+         * Masonry: only a 150 kg machine is heavy enough to scar a paved road,
+         * and cracked bricks are where it stops. A road that could be ground
+         * away completely would be griefing, not wear.
          */
-        if (state.is(Blocks.SAND) || state.is(Blocks.RED_SAND)) {
-            double chance = getChance(vehicleClass);
-
-            if (random.nextDouble() >= chance) {
+        if (state.is(Blocks.STONE_BRICKS)) {
+            if (vehicleClass != VehicleClass.VERY_HEAVY) {
                 return;
             }
 
-            if (vehicleClass == VehicleClass.LIGHT) {
+            if (random.nextDouble()
+                    >= TireTracksConfig.stoneBrickCrackChance()) {
                 return;
             }
-
-            if (vehicleClass == VehicleClass.MEDIUM) {
-                Block sandstone = state.is(Blocks.RED_SAND)
-                        ? Blocks.RED_SANDSTONE
-                        : Blocks.SANDSTONE;
-
-                level.setBlock(
-                        pos,
-                        sandstone.defaultBlockState(),
-                        Block.UPDATE_ALL
-                );
-
-                clearVegetation(level, pos.above());
-                spawnBreakParticles(level, pos, state);
-
-                RoadHealing.touch(level, pos);
-
-                return;
-            }
-
-            /*
-             * Heavy vehicles punch the sand down, leaving a hole. Only if there
-             * is solid ground below, otherwise it would cascade through the
-             * terrain.
-             */
-            if (vehicleClass == VehicleClass.HEAVY) {
-                if (!hasSolidFloor(level, pos)) {
-                    return;
-                }
-
-                level.removeBlock(pos, false);
-
-                clearVegetation(level, pos.above());
-                spawnBreakParticles(level, pos, state);
-
-                return;
-            }
-        }
-
-        /*
-         * Stone: light vehicles leave it untouched, medium and heavy crack it
-         * into cobblestone or andesite, chosen at random so the track blends
-         * into the landscape.
-         */
-        if (state.is(Blocks.STONE)) {
-            if (vehicleClass == VehicleClass.LIGHT) {
-                return;
-            }
-
-            double chance = getChance(vehicleClass);
-
-            if (random.nextDouble() >= chance) {
-                return;
-            }
-
-            Block cracked = random.nextBoolean()
-                    ? Blocks.COBBLESTONE
-                    : Blocks.ANDESITE;
 
             level.setBlock(
                     pos,
-                    cracked.defaultBlockState(),
+                    Blocks.CRACKED_STONE_BRICKS.defaultBlockState(),
                     Block.UPDATE_ALL
             );
 
-            clearVegetation(level, pos.above());
             spawnBreakParticles(level, pos, state);
 
-            RoadHealing.touch(level, pos);
+            return;
+        }
 
+        if (state.is(Blocks.SAND) || state.is(Blocks.RED_SAND)) {
+            churnSand(level, pos, state, vehicleClass, random);
+            return;
+        }
+
+        if (state.is(Blocks.STONE)
+                || state.is(Blocks.COBBLESTONE)
+                || state.is(Blocks.ANDESITE)) {
+            churnStone(level, pos, state, vehicleClass, random);
             return;
         }
 
@@ -260,6 +227,25 @@ public final class TerrainDeformer {
         int stage = stageOf(state);
 
         if (stage == STAGE_NONE) {
+            return;
+        }
+
+        /*
+         * A very heavy machine does not only smear the ground: once in a long
+         * while the soil simply gives way and a wheel drops into an open hole.
+         * Guarded by solid ground below, so it can never open a shaft into a
+         * cave, and never applied to a puddle, which is water rather than soil.
+         */
+        if (vehicleClass == VehicleClass.VERY_HEAVY
+                && stage != STAGE_PUDDLE
+                && random.nextDouble()
+                < TireTracksConfig.groundCollapseChance()
+                && hasSolidFloor(level, pos)) {
+            level.removeBlock(pos, false);
+
+            clearVegetation(level, pos.above());
+            spawnBreakParticles(level, pos, state);
+
             return;
         }
 
@@ -292,8 +278,168 @@ public final class TerrainDeformer {
         clearVegetation(level, pos.above());
 
         spawnBreakParticles(level, pos, state);
+    }
 
-        RoadHealing.touch(level, pos);
+    /**
+     * Sand: light vehicles leave no trace, medium ones pack it into sandstone,
+     * heavy ones punch a single block down and very heavy ones dig themselves
+     * into a pit while the sand above caves in behind them.
+     */
+    private static void churnSand(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            VehicleClass vehicleClass,
+            RandomSource random
+    ) {
+        if (vehicleClass == VehicleClass.LIGHT) {
+            return;
+        }
+
+        if (random.nextDouble() >= getChance(vehicleClass)) {
+            return;
+        }
+
+        if (vehicleClass == VehicleClass.MEDIUM) {
+            Block sandstone = state.is(Blocks.RED_SAND)
+                    ? Blocks.RED_SANDSTONE
+                    : Blocks.SANDSTONE;
+
+            level.setBlock(
+                    pos,
+                    sandstone.defaultBlockState(),
+                    Block.UPDATE_ALL
+            );
+
+            clearVegetation(level, pos.above());
+            spawnBreakParticles(level, pos, state);
+
+            return;
+        }
+
+        int depth = vehicleClass == VehicleClass.VERY_HEAVY
+                ? Math.max(1, TireTracksConfig.sandSinkDepth())
+                : 1;
+
+        sinkIntoSand(level, pos, state, depth);
+    }
+
+    /**
+     * Removes up to {@code maxDepth} sand blocks straight down.
+     *
+     * <p>Every step needs solid ground underneath it, so the hole stops at the
+     * bottom of the sand column instead of cascading into a cave. Sand above
+     * the hole falls in by itself, which is exactly the burying effect.</p>
+     */
+    private static void sinkIntoSand(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            int maxDepth
+    ) {
+        BlockPos cursor = pos;
+        BlockState cursorState = state;
+
+        int removed = 0;
+
+        while (removed < maxDepth) {
+            if (Surfaces.isImmune(cursorState)) {
+                break;
+            }
+
+            if (!cursorState.is(Blocks.SAND)
+                    && !cursorState.is(Blocks.RED_SAND)) {
+                break;
+            }
+
+            if (!hasSolidFloor(level, cursor)) {
+                break;
+            }
+
+            level.removeBlock(cursor, false);
+            spawnBreakParticles(level, cursor, cursorState);
+
+            removed++;
+
+            cursor = cursor.below();
+            cursorState = level.getBlockState(cursor);
+        }
+
+        if (removed > 0) {
+            clearVegetation(level, pos.above());
+        }
+    }
+
+    /**
+     * Rock: stubborn on purpose.
+     *
+     * <p>Light vehicles never mark it. Everything heavier cracks stone into
+     * cobblestone or andesite, chosen at random so the track blends into the
+     * landscape rather than reading as a laid stripe, but only at a fraction of
+     * the normal wear chance: most passes leave the stone exactly as it was.
+     * Only a very heavy machine can take the last step and crush cracked rock
+     * into gravel.</p>
+     */
+    private static void churnStone(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            VehicleClass vehicleClass,
+            RandomSource random
+    ) {
+        if (vehicleClass == VehicleClass.LIGHT) {
+            return;
+        }
+
+        if (state.is(Blocks.COBBLESTONE) || state.is(Blocks.ANDESITE)) {
+            if (vehicleClass != VehicleClass.VERY_HEAVY) {
+                return;
+            }
+
+            if (random.nextDouble()
+                    >= TireTracksConfig.stoneCrushChance()) {
+                return;
+            }
+
+            /*
+             * Gravel falls. Without solid ground below, crushing the rock would
+             * punch a hole through the terrain instead of leaving a rut.
+             */
+            if (!hasSolidFloor(level, pos)) {
+                return;
+            }
+
+            level.setBlock(
+                    pos,
+                    Blocks.GRAVEL.defaultBlockState(),
+                    Block.UPDATE_ALL
+            );
+
+            clearVegetation(level, pos.above());
+            spawnBreakParticles(level, pos, state);
+
+            return;
+        }
+
+        double chance = getChance(vehicleClass)
+                * TireTracksConfig.stoneCrackMultiplier();
+
+        if (random.nextDouble() >= chance) {
+            return;
+        }
+
+        Block cracked = random.nextBoolean()
+                ? Blocks.COBBLESTONE
+                : Blocks.ANDESITE;
+
+        level.setBlock(
+                pos,
+                cracked.defaultBlockState(),
+                Block.UPDATE_ALL
+        );
+
+        clearVegetation(level, pos.above());
+        spawnBreakParticles(level, pos, state);
     }
 
     private static double getChance(VehicleClass vehicleClass) {
@@ -301,6 +447,7 @@ public final class TerrainDeformer {
             case LIGHT -> TireTracksConfig.lightChance();
             case MEDIUM -> TireTracksConfig.mediumChance();
             case HEAVY -> TireTracksConfig.heavyChance();
+            case VERY_HEAVY -> TireTracksConfig.veryHeavyChance();
         };
     }
 
@@ -316,9 +463,6 @@ public final class TerrainDeformer {
             Weather.Moisture moisture
     ) {
         switch (targetStage) {
-            case STAGE_PATH:
-                return Blocks.DIRT_PATH.defaultBlockState();
-
             case STAGE_COARSE:
                 return Blocks.COARSE_DIRT.defaultBlockState();
 
@@ -537,7 +681,7 @@ public final class TerrainDeformer {
                 >= TireTracksConfig.snowToMudChance()) {
             return;
         }
-        
+
         if (Surfaces.isMuddyable(belowState)) {
             level.setBlock(
                     belowPos,
@@ -551,6 +695,9 @@ public final class TerrainDeformer {
      * A silent puff of the old block. Deformation deliberately makes no sound:
      * a block break noise under every wheel, several times a second, is noise
      * rather than feedback.
+     *
+     * <p>Grass and moss are swapped for plain dirt, so tearing up a lawn throws
+     * up soil instead of green flecks.</p>
      */
     private static void spawnBreakParticles(
             ServerLevel level,
@@ -564,12 +711,12 @@ public final class TerrainDeformer {
         level.sendParticles(
                 new BlockParticleOption(
                         ParticleTypes.BLOCK,
-                        brokenState
+                        Surfaces.particleStateFor(brokenState)
                 ),
                 pos.getX() + 0.5D,
                 pos.getY() + 1.0D,
                 pos.getZ() + 0.5D,
-                6,
+                Particles.count(6),
                 0.25D,
                 0.05D,
                 0.25D,
